@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible issue in ArkByte Voice Studio Web
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include voice recordings, generated audio, databases, bridge tokens or private logs."
+  - type: input
+    id: version
+    attributes:
+      label: ArkByte version
+      placeholder: "1.1.1"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS / Node / Python versions
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour and sanitized error
+    validations:
+      required: true

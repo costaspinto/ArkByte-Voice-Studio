@@ -1,0 +1,4 @@
+# Optional local neural voice-generation stack. Install with INSTALL_WEB_WINDOWS.ps1 -InstallAI.
+# Model weights are downloaded by Chatterbox on first load, not bundled in this repository.
+chatterbox-tts==0.1.7
+soundfile>=0.12

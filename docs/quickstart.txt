@@ -1,0 +1,49 @@
+ARKBYTE VOICE STUDIO — WEB EDITION 1.2.0
+
+QUICK START — WINDOWS 10/11 x64
+
+1. Before extracting, right-click the downloaded ZIP > Properties. If Windows shows an Unblock checkbox under Security, tick it > Apply > OK. Do not disable SmartScreen or Defender.
+2. Extract All to a writable folder under your user profile.
+3. Double-click:
+
+   INSTALL ARKBYTE VOICE STUDIO WEB.cmd
+
+4. Wait for installation. It checks Node.js, Python and FFmpeg, creates a dedicated web Python environment, installs Next.js dependencies and the optional Chatterbox AI stack, and creates private local credentials. The first Chatterbox model-weight download happens when you first load the AI engine.
+5. Double-click:
+
+   START ARKBYTE VOICE STUDIO WEB.cmd
+
+6. The web workspace opens at http://127.0.0.1:3000.
+
+To stop services, double-click:
+
+   STOP ARKBYTE VOICE STUDIO WEB.cmd
+
+PRODUCTION BUILD
+
+After installation, double-click BUILD ARKBYTE VOICE STUDIO WEB.cmd. Then start production mode in PowerShell:
+
+   .\START ARKBYTE VOICE STUDIO WEB.ps1 -Production
+
+SECURITY
+
+The Next.js app and Python bridge bind to localhost only. Do not expose ports 3000 or 8765 to the internet or LAN. Creator data and local model caches are stored in %LOCALAPPDATA%\ArkByte Voice Studio and may be shared with the desktop edition when configured to the same data root. The bridge token is private in web\.env.local; never publish that file.
+
+TROUBLESHOOTING
+
+Installer logs: logs\
+Backend logs: logs\backend.log and logs\backend-error.log
+Next.js logs: logs\nextjs.log and logs\nextjs-error.log
+AI logs: %LOCALAPPDATA%\ArkByte Voice Studio\logs\
+
+See README.md and docs\ for complete setup, architecture, security and recovery instructions.
+
+NEW IN 1.2.0
+
+- Voice Lab: enrol up to 10 recordings, review audio quality, edit transcripts and choose the reference anchor.
+- Benchmark Studio: A/B playback and acoustic proxy reports. Optional ECAPA speaker-embedding comparison requires a separate dependency/model setup.
+- Optional VoxCPM 2 generation adapter: see docs\MODEL_ADAPTERS.md before installing.
+- Optional Faster-Whisper can draft transcripts locally; review and save every transcript before Qwen3-TTS dataset export. Fine-tuning is performed separately.
+- Read docs\MANUAL_VOICE_TESTING.md before testing your voice.
+
+The application does not automatically classify accents, treat ASR drafts as verified transcripts, or guarantee a perfect clone. Full Next.js semantic typecheck/production build and real model inference must be run on the target Windows PC.

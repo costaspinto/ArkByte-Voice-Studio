@@ -1,0 +1,4 @@
+# Optional ECAPA-TDNN speaker-embedding comparison.
+# IMPORTANT: SpeechBrain depends on compatible PyTorch/torchaudio versions.
+# Verify the existing web .venv before installing; a cloned test environment is safest.
+speechbrain>=1.0,<2.0

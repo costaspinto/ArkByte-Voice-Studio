@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement for the local creator workflow
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What creator workflow is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Product constraints
+      options:
+        - label: Must work without paid APIs or subscriptions
+        - label: Must support local processing
+        - label: Must preserve existing creator data

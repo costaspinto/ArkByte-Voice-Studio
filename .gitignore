@@ -1,0 +1,76 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!web/.env.example
+web/.env.local
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+
+# Python
+.venv/
+.venv.backup-*/
+venv/
+python-runtime.txt
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# App data and runtime state
+logs/
+run/
+*.db
+*.db-shm
+*.db-wal
+profiles/
+imports/
+outputs/
+cache/
+temp/
+model-cache/
+
+# Build and release output
+Build Output/
+dist/
+release/
+*.msix
+*.exe
+*.pfx
+*.cer
+*.key
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# Local Python environments
+.venv-*/
+# Node dependencies and generated builds
+node_modules/
+.next/
+out/
+# Local runtime state
+*.log
+*.pid
+python-runtime.txt.backup*
+# Secrets and environment files
+# Operating system files
+
+# Local installation snapshots and backups
+/chatterbox-install-actual.json
+/chatterbox-install-plan.json
+/.gitignore.backup-*
+# ArkByte local-only data
+/.local-backups/
+/.gitignore.backup-*/
+/python-runtime.txt.backup*
+*.backup-*
+*.bak
+*.tsbuildinfo

@@ -1,0 +1,15 @@
+ARKBYTE VOICE STUDIO WEB — BEFORE FIRST RUN
+
+1. After downloading the ZIP, right-click it in File Explorer.
+2. Choose Properties.
+3. On the General tab, if Windows shows an Unblock checkbox under Security, tick it.
+4. Click Apply, then OK.
+5. Extract All to a folder you own, for example C:\Users\<you>\ArkByte Voice Studio Web.
+6. Open PowerShell in the extracted folder and run:
+
+   Set-ExecutionPolicy -Scope Process Bypass -Force
+   .\INSTALL_WEB_WINDOWS.ps1
+
+This only changes the execution policy for the current PowerShell process. It does not disable SmartScreen or Windows Defender.
+
+If the ZIP has no Unblock checkbox, continue with extraction. Do not disable Windows security protections to install this app.

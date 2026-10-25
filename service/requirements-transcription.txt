@@ -1,0 +1,3 @@
+# Optional local speech-to-text for draft transcript creation.
+# Model weights download to the ArkByte cache on the first transcription request.
+faster-whisper>=1.0.3,<2.0

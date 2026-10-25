@@ -1,0 +1,3 @@
+# Optional experimental model adapter. Install in a cloned/isolated Python environment.
+# Do not install into the working Chatterbox environment without a dependency audit.
+voxcpm
