@@ -14,9 +14,10 @@ import { api, StudioApiError } from "@/lib/api";
 import type { GenerationJob, Health, HistoryItem, StudioProject, StudioProjectSummary, VoiceProfile } from "@/lib/types";
 import VoiceLab from "@/components/voice-lab";
 import BenchmarkLab from "@/components/benchmark-lab";
+import CustomVoiceLab from "@/components/custom-voice-lab";
 
-type Page = "overview" | "projects" | "voices" | "lab" | "benchmark" | "script" | "history" | "settings";
-type ModelCapability = { id: string; name: string; package: string; role: string; status: string; integrated: boolean };
+type Page = "overview" | "projects" | "voices" | "lab" | "customvoice" | "benchmark" | "script" | "history" | "settings" | "about";
+type ModelCapability = { id: string; name: string; package: string; role: string; status: string; integrated: boolean; hardware_note?: string; requires_transcript?: boolean; recommended_vram_gb?: number; first_use_download?: boolean };
 type Toast = { id: number; title: string; message: string; kind: "success" | "error" | "info" | "warning" };
 
 const LANGUAGES = [
@@ -33,10 +34,12 @@ const navItems: { id: Page; label: string; icon: typeof Home; section?: string }
   { id: "projects", label: "Projects", icon: FolderOpen },
   { id: "voices", label: "Voice library", icon: Mic2 },
   { id: "lab", label: "Voice Lab", icon: Activity },
+  { id: "customvoice", label: "Custom Voice Lab", icon: AudioWaveform },
   { id: "script", label: "Script studio", icon: WandSparkles },
   { id: "benchmark", label: "Benchmark Studio", icon: BarChart3, section: "Evaluation" },
   { id: "history", label: "Generation history", icon: Clock3, section: "Your work" },
-  { id: "settings", label: "Settings & health", icon: Settings2 }
+  { id: "settings", label: "Settings & health", icon: Settings2 },
+  { id: "about", label: "About ArkByte", icon: Info, section: "Studio" }
 ];
 
 function formatDate(value?: string) {
@@ -114,8 +117,12 @@ export default function StudioShell() {
   const [exaggeration, setExaggeration] = useState(0.5);
   const [pace, setPace] = useState(0.5);
   const [temperature, setTemperature] = useState(0.8);
-  const [modelId, setModelId] = useState<"chatterbox" | "voxcpm2">("chatterbox");
+  const [modelId, setModelId] = useState<"chatterbox" | "voxcpm05" | "voxcpm2">("chatterbox");
   const [generating, setGenerating] = useState(false);
+  const [generationRightsAck, setGenerationRightsAck] = useState(false);
+  const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [profileToDelete, setProfileToDelete] = useState<VoiceProfile | null>(null);
   const pollAbort = useRef<AbortController | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -196,24 +203,81 @@ export default function StudioShell() {
   const submitGeneration = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedProfile) { notify("Select a voice", "Create or choose a voice profile before generating.", "error"); return; }
+    if (!generationRightsAck) { notify("Usage confirmation required", "Confirm that you have permission to use this voice and agree to the responsible-use policy.", "error"); return; }
     if (script.trim().length < 3) { notify("Add a script", "Write or paste narration text before generating.", "error"); return; }
     if (script.length > 50000) { notify("Script is too long", "The current limit is 50,000 characters.", "error"); return; }
+    const selectedCapability = modelCapabilities.find(item => item.id === modelId);
     const selectedModelReady = modelId === "chatterbox"
       ? Boolean(health?.engine.installed)
-      : Boolean(modelCapabilities.find(item => item.id === "voxcpm" && item.status === "installed"));
-    if (!selectedModelReady) { notify("Selected model is not installed", modelId === "voxcpm2" ? "Install the optional VoxCPM package in a tested environment first. Chatterbox remains available." : "Install the local Chatterbox engine, then refresh system health.", "error"); goto("settings"); return; }
+      : Boolean(selectedCapability?.integrated && selectedCapability.status === "installed");
+    if (!selectedModelReady) { notify("Selected model is not installed", modelId === "chatterbox" ? "Install the local Chatterbox engine, then refresh system health." : "Run INSTALL VOXCPM MODELS.ps1, then restart ArkByte and refresh system health.", "error"); goto("settings"); return; }
     setGenerating(true);
     setActiveJob({ id: "pending", status: "queued", progress: 0, message: "Submitting your narration…" });
     try {
       const result = await api<{ job: GenerationJob }>("/api/v1/generations", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile_id: selectedProfile, script, language_id: language, output_name: outputName, exaggeration, cfg_weight: pace, temperature, model_id: modelId })
+        body: JSON.stringify({ profile_id: selectedProfile, script, language_id: language, output_name: outputName, exaggeration, cfg_weight: pace, temperature, model_id: modelId, rights_ack: generationRightsAck })
       });
       setActiveJob(result.job);
+      setGenerationRightsAck(false);
       void pollGeneration(result.job.id);
     } catch (error) {
       setGenerating(false);
+      setGenerationRightsAck(false);
       notify("Generation could not start", error instanceof Error ? error.message : "Unexpected local error.", "error");
+    }
+  };
+
+  const deleteHistoryItem = async (item: HistoryItem) => {
+    if (!window.confirm(`Permanently delete this narration and its generated audio file?\n\n“${item.script_preview || "Narration"}”\n\nVoice profiles, original reference recordings and saved projects will remain.`)) return;
+    setDeletingHistoryId(item.id);
+    try {
+      await api<{ ok: boolean; deleted: number }>(`/api/v1/history/${item.id}`, { method: "DELETE" });
+      setHistory(current => current.filter(entry => entry.id !== item.id));
+      setPlaying(current => current?.id === item.id ? null : current);
+      notify("History item deleted", "The history entry and its generated audio were deleted. Voice profiles and source recordings were kept.");
+    } catch (error) {
+      notify("Could not delete history item", error instanceof Error ? error.message : "The local service could not delete this item.", "error");
+    } finally {
+      setDeletingHistoryId(null);
+    }
+  };
+
+  const permanentlyDeleteVoiceProfile = async (profile: VoiceProfile) => {
+    const result = await api<{ ok: boolean; deleted: boolean; file_cleanup_complete: boolean }>(`/api/v1/profiles/${profile.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation_phrase: "DELETE VOICE" })
+    });
+    setProfiles(current => current.filter(item => item.id !== profile.id));
+    if (selectedProfile === profile.id) setSelectedProfile("");
+    if (profileToDelete?.id === profile.id) setProfileToDelete(null);
+    setHistory(current => current.map(item => item.profile_id === profile.id ? { ...item, profile_id: null } : item));
+    setProjects(current => current.map(item => item.profile_id === profile.id ? { ...item, profile_id: null } : item));
+    setPlaying(current => current && current.profile_id === profile.id ? null : current);
+    await refresh(true);
+    if (result.file_cleanup_complete) {
+      notify("Voice profile permanently deleted", `${profile.name}: ArkByte-managed source recordings, reference clips and profile data were removed. Generated audio and saved projects were kept.`, "success");
+    } else {
+      notify("Profile removed; file cleanup pending", "The profile is no longer available. Windows is holding some source files; ArkByte will retry cleanup the next time the local service starts.", "warning");
+    }
+  };
+
+  const clearHistory = async () => {
+    if (!history.length || clearingHistory || generating) return;
+    const confirmed = window.confirm(`Permanently delete all ${history.length} generation-history item(s) and their generated audio files?\n\nThis does NOT delete voice profiles, original reference recordings, saved projects or model files.`);
+    if (!confirmed) return;
+    setClearingHistory(true);
+    try {
+      const result = await api<{ ok: boolean; deleted: number }>("/api/v1/history", { method: "DELETE" });
+      setHistory([]);
+      setPlaying(null);
+      notify("Generation history cleared", `${result.deleted} history item(s) and their generated audio files were deleted.`);
+    } catch (error) {
+      notify("Could not clear history", error instanceof Error ? error.message : "The local service could not clear generation history.", "error");
+      await refresh(true);
+    } finally {
+      setClearingHistory(false);
     }
   };
 
@@ -291,7 +355,8 @@ export default function StudioShell() {
   const filteredHistory = useMemo(() => history.filter(item => `${item.profile_name} ${item.script_preview} ${item.language}`.toLowerCase().includes(search.toLowerCase())), [history, search]);
   const filteredProjects = useMemo(() => projects.filter(item => `${item.title} ${item.script_preview} ${item.language_id}`.toLowerCase().includes(search.toLowerCase())), [projects, search]);
   const engineReady = Boolean(health?.engine.installed);
-  const selectedModelReady = modelId === "chatterbox" ? engineReady : Boolean(modelCapabilities.find(item => item.id === "voxcpm" && item.status === "installed"));
+  const selectedCapability = modelCapabilities.find(item => item.id === modelId);
+  const selectedModelReady = modelId === "chatterbox" ? engineReady : Boolean(selectedCapability?.integrated && selectedCapability.status === "installed");
   const mediaReady = Boolean(health?.media.ffmpeg && health?.media.ffprobe);
   const databaseReady = health?.database.status === "ok";
   const recentHistory = history.slice(0, 4);
@@ -306,7 +371,6 @@ export default function StudioShell() {
         <div><strong>ARKBYTE</strong><span>VOICE STUDIO</span></div>
         <button className="icon-button mobile-close" onClick={() => setMobileNav(false)} aria-label="Close menu"><X size={18} /></button>
       </div>
-      <div className="workspace-label">Workspace</div>
       <nav className="side-nav" aria-label="Main navigation">
         {navItems.map((item, index) => <div key={item.id}>
           {item.section && <div className={`nav-section ${index ? "nav-section-spaced" : ""}`}>{item.section}</div>}
@@ -354,29 +418,42 @@ export default function StudioShell() {
         {page === "voices" && <>
           <div className="page-heading"><div><div className="eyebrow">YOUR REFERENCE COLLECTION</div><h1>Voice library</h1><p>Manage reusable voice references created from recordings you have permission to use.</p></div><button className="button button-primary" onClick={() => setCreateOpen(true)}><Plus size={17} /> New voice profile</button></div>
           <div className="toolbar"><div className="search-box"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search voice profiles…" /></div><div className="toolbar-note"><LockKeyhole size={14} /> Stored locally on this device</div></div>
-          {loading ? <LoadingPanel label="Loading voice profiles…" /> : filteredProfiles.length ? <div className="voice-grid">{filteredProfiles.map((profile, index) => <VoiceCard key={profile.id} profile={profile} index={index} onUse={() => { setSelectedProfile(profile.id); goto("script"); }} onDelete={async () => { if (!window.confirm(`Delete the voice profile “${profile.name}”? Generated audio will not be deleted.`)) return; try { await api(`/api/v1/profiles/${profile.id}`, { method: "DELETE" }); notify("Voice profile deleted", `${profile.name} was removed from your library.`); await refresh(true); } catch (error) { notify("Could not delete profile", error instanceof Error ? error.message : "Unexpected error", "error"); } }} />)}</div> : <EmptyState icon={Mic2} title={search ? "No matching profiles" : "Your voice library is ready"} detail={search ? "Try a different search term." : "Import an existing video or recording to create your first reusable voice profile."} action={search ? "Clear search" : "Create voice profile"} onAction={() => search ? setSearch("") : setCreateOpen(true)} />}
+          {loading ? <LoadingPanel label="Loading voice profiles…" /> : filteredProfiles.length ? <div className="voice-grid">{filteredProfiles.map((profile, index) => <VoiceCard key={profile.id} profile={profile} index={index} onUse={() => { setSelectedProfile(profile.id); goto("script"); }} onDelete={() => setProfileToDelete(profile)} />)}</div> : <EmptyState icon={Mic2} title={search ? "No matching profiles" : "Your voice library is ready"} detail={search ? "Try a different search term." : "Import an existing video or recording to create your first reusable voice profile."} action={search ? "Clear search" : "Create voice profile"} onAction={() => search ? setSearch("") : setCreateOpen(true)} />}
         </>}
 
         {page === "lab" && <VoiceLab profiles={profiles} onRefresh={() => refresh(true)} notify={notify} />}
 
+        {page === "customvoice" && <CustomVoiceLab profiles={profiles} notify={notify} />}
+
         {page === "benchmark" && <BenchmarkLab profiles={profiles} history={history} notify={notify} />}
 
         {page === "script" && <>
-          <div className="page-heading"><div><div className="eyebrow">AI NARRATION WORKSPACE</div><h1>Script studio</h1><p>Shape your narration, tune delivery and generate locally.</p></div><div className="script-heading-actions"><span className="studio-ready"><span className={selectedModelReady ? "ready-dot" : "warning-dot"} />{selectedModelReady ? `${modelId === "voxcpm2" ? "VoxCPM 2" : "Chatterbox"} available` : "Model setup needed"}</span><button type="button" className="button button-quiet button-small" onClick={saveProject} disabled={savingProject || !script.trim()}>{savingProject ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save project</button></div></div>
+          <div className="page-heading"><div><div className="eyebrow">AI NARRATION WORKSPACE</div><h1>Script studio</h1><p>Shape your narration, tune delivery and generate locally.</p></div><div className="script-heading-actions"><span className="studio-ready"><span className={selectedModelReady ? "ready-dot" : "warning-dot"} />{selectedModelReady ? `${modelId === "voxcpm05" ? "VoxCPM 0.5B" : modelId === "voxcpm2" ? "VoxCPM 2" : "Chatterbox"} available` : "Model setup needed"}</span><button type="button" className="button button-quiet button-small" onClick={saveProject} disabled={savingProject || !script.trim()}>{savingProject ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save project</button></div></div>
           <form className="script-layout" onSubmit={submitGeneration}>
             <div className="script-main panel"><div className="panel-title-row"><div><h3>Write your narration</h3><p>Keep paragraphs clear. Long scripts are split automatically.</p></div><span className="local-chip"><LockKeyhole size={12} /> PRIVATE</span></div><div className="project-name-row"><div className="form-field"><label htmlFor="project-title">PROJECT NAME</label><input id="project-title" value={projectTitle} onChange={event => { setProjectTitle(event.target.value); setProjectSaved(false); }} maxLength={100} placeholder="Give this narration a name" /></div><span className="project-save-state">{projectSaved ? "All changes saved locally" : currentProjectId ? "Unsaved changes · click Save" : "New project · not saved yet"}</span></div><div className="script-toolbar"><div className="script-tool-label"><FileText size={15} /> MAIN SCRIPT</div><div className="script-toolbar-actions"><button type="button" className="button button-quiet button-small" onClick={saveProject} disabled={savingProject || !script.trim()}>{savingProject ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Save</button><button type="button" className="button button-quiet button-small" onClick={() => { setScript(""); setProjectSaved(false); }} disabled={!script}><Trash2 size={14} /> Clear</button></div></div><textarea className="script-editor" value={script} onChange={event => { setScript(event.target.value); setProjectSaved(false); }} placeholder="Start writing your YouTube narration…&#10;&#10;A good opening captures attention. Keep each paragraph focused and let your voice carry the story." maxLength={50000} /><div className="editor-footer"><span>{totalChars.toLocaleString()} / 50,000 characters</span><span>~{Math.max(1, Math.ceil(totalChars / 850))} min read · estimated</span></div><div className="script-bottom"><div className="output-name-field"><label htmlFor="output-name">OUTPUT FILE NAME</label><input id="output-name" value={outputName} onChange={event => { setOutputName(event.target.value); setProjectSaved(false); }} maxLength={100} /></div><div className="language-field"><label htmlFor="language">LANGUAGE</label><div className="select-wrap"><select id="language" value={language} onChange={event => { setLanguage(event.target.value); setProjectSaved(false); }}>{LANGUAGES.map(([label, code]) => <option value={code} key={code}>{label}</option>)}</select><ChevronDown size={15} /></div></div></div></div>
             <aside className="script-side"><section className="panel voice-select-panel"><div className="side-panel-title"><div><div className="eyebrow">VOICE PROFILE</div><h3>Choose your voice</h3></div><div className="side-icon"><Mic2 size={18} /></div></div>{profiles.length ? <div className="select-wrap voice-select-wrap"><select aria-label="Voice profile" value={selectedProfile} onChange={event => { setSelectedProfile(event.target.value); setProjectSaved(false); }}>{profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.language}</option>)}</select><ChevronDown size={15} /></div> : <div className="inline-empty"><Mic2 size={18} /><span>No voice profiles created yet.</span><button type="button" className="text-link" onClick={() => setCreateOpen(true)}>Create one <ArrowRight size={13} /></button></div>}{activeProfile && <div className="selected-voice"><div className="voice-avatar">{initials(activeProfile.name)}</div><div className="selected-voice-meta"><strong>{activeProfile.name}</strong><span>{activeProfile.language} · local reference</span></div><span className="selected-check"><Check size={14} /></span></div>}</section>
-              <section className="panel controls-panel"><div className="section-head compact"><div><h3>Delivery controls</h3><p>Fine-tune the generation style.</p></div><SlidersHorizontal size={17} className="muted-icon" /></div><div className="form-field model-select-field"><label htmlFor="generation-model">GENERATION MODEL</label><div className="select-wrap"><select id="generation-model" value={modelId} onChange={event => { setModelId(event.target.value as "chatterbox" | "voxcpm2"); setProjectSaved(false); }}><option value="chatterbox">Chatterbox Multilingual V3{engineReady ? " · installed" : " · unavailable"}</option><option value="voxcpm2" disabled={!modelCapabilities.some(item => item.id === "voxcpm" && item.status === "installed")}>VoxCPM 2{modelCapabilities.some(item => item.id === "voxcpm" && item.status === "installed") ? " · installed" : " · optional install required"}</option></select><ChevronDown size={15} /></div><small>{modelId === "voxcpm2" ? "Uses reference-only cloning, or transcript-conditioned Hi-Fi when the anchor transcript exactly matches a reference clip of 30 seconds or less." : "Uses the existing Chatterbox Multilingual V3 reference-conditioning path."}</small></div><SliderField label="Expression" value={exaggeration} min={0.25} max={2} step={0.05} valueLabel={exaggeration.toFixed(2)} onChange={value => { setExaggeration(value); setProjectSaved(false); }} left="Subtle" right="Expressive" /><SliderField label="Pacing guidance" value={pace} min={0} max={1} step={0.05} valueLabel={pace.toFixed(2)} onChange={value => { setPace(value); setProjectSaved(false); }} left="Relaxed" right="Guided" /><SliderField label="Variation" value={temperature} min={0.05} max={2} step={0.05} valueLabel={temperature.toFixed(2)} onChange={value => { setTemperature(value); setProjectSaved(false); }} left="Consistent" right="Dynamic" /><div className="control-note"><Info size={14} /> Controls are model-dependent. Results may vary by recording quality.</div></section>
-              <section className="generate-card"><div className="generate-card-top"><div className="generate-spark"><Sparkles size={18} /></div><span>LOCAL AI GENERATION</span></div><h3>Ready to give your script a voice?</h3><p>Your narration is processed on this device. No paid API or cloud upload.</p><button className="button button-primary generate-button" type="submit" disabled={generating || !profiles.length || !selectedModelReady || !script.trim()}>{generating ? <><Loader2 size={17} className="spin" /> Generating…</> : <><WandSparkles size={17} /> Generate narration <ArrowRight size={16} /></>}</button><div className="generate-meta"><span><ShieldCheck size={13} /> Private</span><span><Zap size={13} /> GPU / CPU fallback</span></div></section>
+              <section className="panel controls-panel"><div className="section-head compact"><div><h3>Delivery controls</h3><p>Fine-tune the generation style.</p></div><SlidersHorizontal size={17} className="muted-icon" /></div><div className="form-field model-select-field"><label htmlFor="generation-model">GENERATION MODEL</label><div className="select-wrap"><select id="generation-model" value={modelId} onChange={event => { setModelId(event.target.value as "chatterbox" | "voxcpm05" | "voxcpm2"); setProjectSaved(false); }}><option value="chatterbox">Chatterbox Multilingual V3{engineReady ? " · installed" : " · unavailable"}</option><option value="voxcpm05">VoxCPM 0.5B{modelCapabilities.some(item => item.id === "voxcpm05" && item.status === "installed") ? " · installed" : " · install required"}</option><option value="voxcpm2">VoxCPM 2 (2B){modelCapabilities.some(item => item.id === "voxcpm2" && item.status === "installed") ? " · installed" : " · install required · 8 GB VRAM"}</option></select><ChevronDown size={15} /></div><small>{modelId === "voxcpm05" ? "English and Chinese only. Requires a reviewed exact transcript for a reference clip (30 seconds or less). Around 5 GB VRAM is reported; 6 GB GPUs are tight. First use downloads the checkpoint." : modelId === "voxcpm2" ? "Multilingual reference conditioning. The upstream VRAM reference is about 8 GB, so this is not recommended for a 6 GB GPU." : "Chatterbox Multilingual V3 uses reference-audio conditioning and supports the current studio language list."}</small></div><SliderField label="Expression" value={exaggeration} min={0.25} max={2} step={0.05} valueLabel={exaggeration.toFixed(2)} onChange={value => { setExaggeration(value); setProjectSaved(false); }} left="Subtle" right="Expressive" /><SliderField label="Pacing guidance" value={pace} min={0} max={1} step={0.05} valueLabel={pace.toFixed(2)} onChange={value => { setPace(value); setProjectSaved(false); }} left="Relaxed" right="Guided" /><SliderField label="Variation" value={temperature} min={0.05} max={2} step={0.05} valueLabel={temperature.toFixed(2)} onChange={value => { setTemperature(value); setProjectSaved(false); }} left="Consistent" right="Dynamic" /><div className="control-note"><Info size={14} /> Controls are model-dependent. Results may vary by recording quality.</div></section>
+              <section className="generate-card"><div className="generate-card-top"><div className="generate-spark"><Sparkles size={18} /></div><span>LOCAL AI GENERATION</span></div><h3>Ready to give your script a voice?</h3><p>Your narration is processed on this device. No paid API or cloud upload.</p><label className="generation-policy-check"><input type="checkbox" checked={generationRightsAck} disabled={generating} onChange={event => setGenerationRightsAck(event.target.checked)} /><span>I own this voice or have the speaker’s explicit permission. I will not use generated speech to impersonate or deceive, commit fraud, harass anyone, create non-consensual intimate content, or bypass identity/biometric verification. I will disclose synthetic speech where people could mistake it for a real recording.</span></label><button className="button button-primary generate-button" type="submit" disabled={generating || !profiles.length || !selectedModelReady || !script.trim() || !generationRightsAck}>{generating ? <><Loader2 size={17} className="spin" /> Generating…</> : <><WandSparkles size={17} /> Generate narration <ArrowRight size={16} /></>}</button><div className="generate-meta"><span><ShieldCheck size={13} /> Private</span><span><Zap size={13} /> GPU / CPU fallback</span></div></section>
             </aside>
           </form>
           {activeJob && <section className={`panel job-panel job-${activeJob.status}`}><div className="job-header"><div><div className="eyebrow">GENERATION TASK</div><h3>{activeJob.status === "complete" ? "Your narration is ready" : activeJob.status === "failed" ? "Generation needs attention" : "Creating your narration"}</h3><p>{activeJob.message}</p></div><span className={`job-status ${activeJob.status}`}>{activeJob.status}</span></div><div className="progress-track"><i style={{ width: `${Math.max(2, activeJob.progress * 100)}%` }} /></div><div className="job-footer"><span>{Math.round(activeJob.progress * 100)}% complete</span>{activeJob.status === "complete" && activeJob.audio_url && <a className="button button-primary button-small" href={`${activeJob.audio_url}?download=1`}><Download size={14} /> Download WAV</a>}{activeJob.status === "failed" && <span className="error-inline">{activeJob.error?.code}</span>}</div></section>}
         </>}
 
         {page === "history" && <>
-          <div className="page-heading"><div><div className="eyebrow">YOUR AUDIO OUTPUTS</div><h1>Generation history</h1><p>Review and download narrations created on this device.</p></div><button className="button button-quiet" onClick={() => void refresh(true)}><RefreshCw size={15} /> Refresh</button></div>
+          <div className="page-heading"><div><div className="eyebrow">YOUR AUDIO OUTPUTS</div><h1>Generation history</h1><p>Review, download or permanently delete narrations created on this device.</p></div><div className="history-heading-actions"><button className="button button-quiet" onClick={() => void refresh(true)}><RefreshCw size={15} /> Refresh</button>{history.length > 0 && <button className="button button-danger-quiet" onClick={() => void clearHistory()} disabled={clearingHistory || generating}>{clearingHistory ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />} Clear history</button>}</div></div>
           <div className="toolbar"><div className="search-box"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search scripts and voice profiles…" /></div><div className="toolbar-note"><FileAudio size={14} /> WAV audio · local files</div></div>
-          {filteredHistory.length ? <div className="panel history-panel"><div className="history-table-head"><span>PROJECT</span><span>VOICE</span><span>CREATED</span><span>STATUS</span><span /></div>{filteredHistory.map(item => <HistoryTableRow key={item.id} item={item} onPlay={() => setPlaying(item)} />)}</div> : <EmptyState icon={AudioWaveform} title="No generated audio yet" detail="Completed narrations will be listed here with local playback and download links." action="Open script studio" onAction={() => goto("script")} />}
+          {filteredHistory.length ? <div className="panel history-panel"><div className="history-table-head"><span>PROJECT</span><span>VOICE</span><span>CREATED</span><span>STATUS</span><span /></div>{filteredHistory.map(item => <HistoryTableRow key={item.id} item={item} onPlay={() => setPlaying(item)} onDelete={() => void deleteHistoryItem(item)} deleting={deletingHistoryId === item.id} />)}</div> : <EmptyState icon={AudioWaveform} title="No generated audio yet" detail="Completed narrations will be listed here with local playback and download links." action="Open script studio" onAction={() => goto("script")} />}
+        </>}
+
+        {page === "about" && <>
+          <div className="page-heading"><div><div className="eyebrow">THE CREATOR & THE PROJECT</div><h1>About ArkByte</h1><p>A local-first voice creation studio built by a developer working at the intersection of AI and software.</p></div><a className="button button-quiet" href="https://github.com/costaspinto" target="_blank" rel="noreferrer">GitHub profile <ArrowRight size={15} /></a></div>
+          <section className="about-hero panel"><div className="about-avatar">CP</div><div className="about-hero-copy"><div className="eyebrow">CREATOR · ARKBYTE</div><h2>Costas Pinto</h2><p>Computer Science graduate and AI/ML engineer focused on building practical AI products, Generative AI applications, LLM workflows and full-stack software. ArkByte is the space where those ideas become usable tools.</p><div className="about-meta"><span><CheckCircle2 size={14} /> MCA · AI & Machine Learning</span><span><CheckCircle2 size={14} /> CGPA 9.07</span><span><CheckCircle2 size={14} /> Computer Science</span></div></div></section>
+          <div className="about-grid">
+            <section className="panel about-card"><div className="eyebrow">EDUCATION</div><h3>Academic background</h3><div className="about-item"><strong>Master of Computer Applications</strong><span>Artificial Intelligence & Machine Learning · Manipal University Jaipur · 9.07 CGPA</span></div><div className="about-item"><strong>Bachelor of Science</strong><span>Computer Science · Shivaji University, Kolhapur</span></div></section>
+            <section className="panel about-card"><div className="eyebrow">SELECTED PROJECTS</div><h3>Applied AI work</h3><div className="about-projects"><span>DocuReadAI <small>RAG document assistant</small></span><span>PulmoProbe AI <small>ML prediction application</small></span><span>WildScan <small>Computer vision</small></span><span>EcoSim <small>Simulation and modelling</small></span><span>Atomic Explorer <small>Interactive learning tool</small></span></div></section>
+          </div>
+          <section className="panel about-card about-skills"><div className="eyebrow">TECHNOLOGY</div><h3>Tools used across the work</h3><div className="about-tags">{["Python","PyTorch","TensorFlow","Scikit-learn","LangChain","Hugging Face","LLMs & RAG","FastAPI","Flask","React","Next.js","TypeScript","SQL","Docker","Git","Google Cloud","IBM watsonx.ai"].map(skill => <span key={skill}>{skill}</span>)}</div></section>
+          <p className="about-footnote">ArkByte Voice Studio is a local-first project. Voice profiles require an ownership/permission confirmation, and every generation requires a separate responsible-use acknowledgement. Do not impersonate, deceive, defraud, harass or bypass identity verification. Disclose synthetic speech where listeners could mistake it for a real recording. Read docs/SAFE-USE-POLICY.md for the full policy.</p>
         </>}
 
         {page === "settings" && <>
@@ -389,6 +466,7 @@ export default function StudioShell() {
 
     {playing && <div className="audio-dock"><div className="dock-art"><AudioWaveform size={21} /></div><div className="dock-meta"><strong>{playing.script_preview || "Narration"}</strong><span>{playing.profile_name} · {playing.language}</span></div><audio ref={audioRef} controls src={playing.audio_url || undefined} autoPlay onError={() => notify("Audio unavailable", "The audio file may have been moved or deleted.", "error")} /><button className="icon-button" onClick={() => setPlaying(null)} aria-label="Close audio player"><X size={17} /></button></div>}
     {createOpen && <CreateProfileModal onClose={() => setCreateOpen(false)} onCreated={async profile => { setCreateOpen(false); setSelectedProfile(profile.id); notify("Voice profile created", `${profile.name} is ready for script generation.`); await refresh(true); goto("script"); }} notify={notify} />}
+    {profileToDelete && <DeleteVoiceProfileModal profile={profileToDelete} onClose={() => setProfileToDelete(null)} onConfirm={() => permanentlyDeleteVoiceProfile(profileToDelete)} />}
     <ToastStack toasts={toasts} dismiss={dismissToast} />
   </div>;
 }
@@ -442,14 +520,45 @@ function VoiceCard({ profile, index, onUse, onDelete }: { profile: VoiceProfile;
   const [menuOpen, setMenuOpen] = useState(false);
   return <article className="voice-card" style={{ animationDelay: `${index * 55}ms` }}><div className="voice-card-top"><div className={`voice-profile-art art-${index % 4}`}><AudioWaveform size={25} /></div><div className="voice-card-actions"><button className="icon-button" onClick={() => setMenuOpen(value => !value)} aria-label="Profile actions"><MoreHorizontal size={18} /></button>{menuOpen && <div className="profile-menu"><button onClick={() => { setMenuOpen(false); onUse(); }}><WandSparkles size={14} /> Use in script studio</button><button className="danger-text" onClick={() => { setMenuOpen(false); onDelete(); }}><Trash2 size={14} /> Delete profile</button></div>}</div></div><div className="voice-card-name"><h3>{profile.name}</h3><span className="voice-language">{profile.language}</span></div><p className="voice-source"><FileAudio size={14} /> {profile.source_name}</p><div className="voice-card-wave"><Waveform bars={26} /></div><div className="voice-card-footer"><span><span className="privacy-dot" /> Saved locally</span><button className="button button-quiet button-small" onClick={onUse}>Use voice <ArrowRight size={14} /></button></div></article>;
 }
-function HistoryTableRow({ item, onPlay }: { item: HistoryItem; onPlay: () => void }) {
-  return <div className="history-table-row"><div className="history-project"><div className="history-file-icon"><FileAudio size={17} /></div><div><strong>{item.script_preview || "Narration"}</strong><span>{item.language}</span></div></div><span className="history-voice">{item.profile_name}</span><span className="history-date">{formatDate(item.created_at)}</span><span><span className="complete-pill"><i /> Complete</span></span><div className="history-actions"><button className="icon-button" disabled={!item.audio_url} onClick={onPlay} aria-label="Play"><Play size={15} /></button>{item.audio_url && <a className="icon-button" href={`${item.audio_url}?download=1`} aria-label="Download"><Download size={15} /></a>}</div></div>;
+function HistoryTableRow({ item, onPlay, onDelete, deleting }: { item: HistoryItem; onPlay: () => void; onDelete: () => void; deleting: boolean }) {
+  return <div className="history-table-row"><div className="history-project"><div className="history-file-icon"><FileAudio size={17} /></div><div><strong>{item.script_preview || "Narration"}</strong><span>{item.language}</span></div></div><span className="history-voice">{item.profile_name}</span><span className="history-date">{formatDate(item.created_at)}</span><span><span className="complete-pill"><i /> Complete</span></span><div className="history-actions"><button className="icon-button" disabled={!item.audio_url} onClick={onPlay} aria-label="Play"><Play size={15} /></button>{item.audio_url && <a className="icon-button" href={`${item.audio_url}?download=1`} aria-label="Download"><Download size={15} /></a>}<button className="icon-button history-delete" disabled={deleting} onClick={onDelete} aria-label="Delete history item" title="Delete generated audio and history">{deleting ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}</button></div></div>;
 }
 function SliderField({ label, value, min, max, step, valueLabel, onChange, left, right }: { label: string; value: number; min: number; max: number; step: number; valueLabel: string; onChange: (value: number) => void; left: string; right: string }) {
   return <div className="slider-field"><div className="slider-label"><label>{label}</label><strong>{valueLabel}</strong></div><input type="range" min={min} max={max} step={step} value={value} onChange={event => onChange(Number(event.target.value))} style={{ "--range-progress": `${((value - min) / (max - min)) * 100}%` } as React.CSSProperties} /><div className="slider-ends"><span>{left}</span><span>{right}</span></div></div>;
 }
 function ComponentRow({ icon: Icon, title, detail, ready, warning = false }: { icon: typeof Home; title: string; detail: string; ready: boolean; warning?: boolean }) {
   return <div className="component-row"><div className="component-icon"><Icon size={18} /></div><div className="component-copy"><strong>{title}</strong><span>{detail}</span></div><StatusPill ok={ready} warning={warning && !ready}>{ready ? "Ready" : warning ? "Optional" : "Needs attention"}</StatusPill></div>;
+}
+
+function DeleteVoiceProfileModal({ profile, onClose, onConfirm }: { profile: VoiceProfile; onClose: () => void; onConfirm: () => Promise<void> }) {
+  const [phrase, setPhrase] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const exactPhrase = phrase === "DELETE VOICE";
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!exactPhrase || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The voice profile could not be deleted. No success was reported.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <div className="modal-backdrop delete-profile-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <div className="modal-card delete-profile-modal" role="dialog" aria-modal="true" aria-labelledby="delete-voice-title" aria-describedby="delete-voice-description">
+      <div className="modal-header"><div><div className="eyebrow danger-eyebrow">PERMANENT VOICE DATA REMOVAL</div><h2 id="delete-voice-title">Delete voice profile?</h2><p id="delete-voice-description">This removes <strong>{profile.name}</strong> from the local profile library and permanently deletes its ArkByte-managed reference recordings.</p></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Close delete dialog"><X size={19} /></button></div>
+      <form onSubmit={submit} className="delete-profile-form">
+        <div className="delete-profile-warning"><ShieldCheck size={18} /><div><strong>What will be deleted</strong><p>Original enrolled clips, processed reference audio, transcripts, profile analysis, pronunciation rules and the profile record.</p><strong>What will be kept</strong><p>Generated narrations, saved projects, model files and model caches. Copies you previously exported or copied outside ArkByte are not removed.</p></div></div>
+        <div className="form-field"><label htmlFor="delete-voice-confirmation">TYPE DELETE VOICE TO CONFIRM</label><input id="delete-voice-confirmation" value={phrase} onChange={event => setPhrase(event.target.value)} autoComplete="off" autoFocus spellCheck={false} placeholder="DELETE VOICE" disabled={busy} /></div>
+        {error && <p className="delete-profile-error" role="alert">{error}</p>}
+        <div className="modal-footer"><span><LockKeyhole size={13} /> The local service checks this phrase too.</span><div className="delete-profile-actions"><button type="button" className="button button-quiet" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" className="button button-delete-confirm" disabled={!exactPhrase || busy}>{busy ? <><Loader2 size={15} className="spin" /> Deleting…</> : <><Trash2 size={15} /> Permanently delete voice</>}</button></div></div>
+      </form>
+    </div>
+  </div>;
 }
 
 function CreateProfileModal({ onClose, onCreated, notify }: { onClose: () => void; onCreated: (profile: VoiceProfile) => void; notify: (title: string, message: string, kind?: Toast["kind"]) => void }) {
@@ -493,5 +602,5 @@ function CreateProfileModal({ onClose, onCreated, notify }: { onClose: () => voi
       setBusy(false);
     }
   };
-  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}><div className="modal-card create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><div className="modal-header"><div><div className="eyebrow">VOICE LIBRARY</div><h2 id="create-title">Create a voice profile</h2><p>Use a recording you own or have permission to clone.</p></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Close modal"><X size={19} /></button></div><form onSubmit={submit}><div className={`drop-zone ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`} onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); pickFile(event.dataTransfer.files[0]); }} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}><input ref={inputRef} type="file" accept="video/*,audio/*,.mkv,.flac,.m4a,.aac,.ogg" hidden onChange={event => pickFile(event.target.files?.[0])} />{file ? <><div className="drop-icon success"><CheckCircle2 size={23} /></div><strong>{file.name}</strong><span>{formatBytes(file.size)} · Ready to process</span><small>Click to choose a different file</small></> : <><div className="drop-icon"><Upload size={23} /></div><strong>Drop your video or audio here</strong><span>or browse files from this device</span><small>MP4, MOV, MKV, WAV, MP3 and more · Up to 10 GB</small></>}</div><div className="form-grid"><div className="form-field"><label htmlFor="profile-name">PROFILE NAME</label><input id="profile-name" value={name} onChange={event => setName(event.target.value)} placeholder="e.g. My YouTube Voice" maxLength={80} required /></div><div className="form-field"><label htmlFor="profile-language">LANGUAGE</label><div className="select-wrap"><select id="profile-language" value={language} onChange={event => setLanguage(event.target.value)}>{LANGUAGES.map(([label]) => <option key={label}>{label}</option>)}</select><ChevronDown size={15} /></div></div></div><div className="form-grid segment-grid"><div className="form-field"><label htmlFor="start-seconds">START AT (SECONDS)</label><input id="start-seconds" type="number" min="0" max="86400" step="0.5" value={start} onChange={event => setStart(Math.max(0, Number(event.target.value)))} /></div><div className="form-field"><label htmlFor="duration-seconds">REFERENCE LENGTH</label><div className="select-wrap"><select id="duration-seconds" value={duration} onChange={event => setDuration(Number(event.target.value))}><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="20">20 seconds</option><option value="25">25 seconds</option><option value="30">30 seconds</option></select><ChevronDown size={15} /></div></div></div><label className="check-row"><input type="checkbox" checked={denoise} onChange={event => setDenoise(event.target.checked)} /><span><strong>Clean and normalize reference audio</strong><small>Apply basic filtering and loudness normalization during extraction.</small></span></label><label className="consent-row"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} /><span>I confirm I own this voice or have explicit permission from the speaker to create and use this voice profile.</span></label><div className="modal-footer"><span><LockKeyhole size={13} /> Uploaded media is processed locally.</span><button className="button button-primary" type="submit" disabled={busy || !file || !consent}>{busy ? <><Loader2 size={16} className="spin" /> Creating profile…</> : <><Plus size={16} /> Create voice profile</>}</button></div></form></div></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}><div className="modal-card create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><div className="modal-header"><div><div className="eyebrow">VOICE LIBRARY</div><h2 id="create-title">Create a voice profile</h2><p>Use a recording you own or have permission to clone.</p></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Close modal"><X size={19} /></button></div><form onSubmit={submit}><div className={`drop-zone ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`} onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); pickFile(event.dataTransfer.files[0]); }} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}><input ref={inputRef} type="file" accept="video/*,audio/*,.mkv,.flac,.m4a,.aac,.ogg" hidden onChange={event => pickFile(event.target.files?.[0])} />{file ? <><div className="drop-icon success"><CheckCircle2 size={23} /></div><strong>{file.name}</strong><span>{formatBytes(file.size)} · Ready to process</span><small>Click to choose a different file</small></> : <><div className="drop-icon"><Upload size={23} /></div><strong>Drop your video or audio here</strong><span>or browse files from this device</span><small>MP4, MOV, MKV, WAV, MP3 and more · Up to 10 GB</small></>}</div><div className="form-grid"><div className="form-field"><label htmlFor="profile-name">PROFILE NAME</label><input id="profile-name" value={name} onChange={event => setName(event.target.value)} placeholder="e.g. My YouTube Voice" maxLength={80} required /></div><div className="form-field"><label htmlFor="profile-language">LANGUAGE</label><div className="select-wrap"><select id="profile-language" value={language} onChange={event => setLanguage(event.target.value)}>{LANGUAGES.map(([label]) => <option key={label}>{label}</option>)}</select><ChevronDown size={15} /></div></div></div><div className="form-grid segment-grid"><div className="form-field"><label htmlFor="start-seconds">START AT (SECONDS)</label><input id="start-seconds" type="number" min="0" max="86400" step="0.5" value={start} onChange={event => setStart(Math.max(0, Number(event.target.value)))} /></div><div className="form-field"><label htmlFor="duration-seconds">REFERENCE LENGTH</label><div className="select-wrap"><select id="duration-seconds" value={duration} onChange={event => setDuration(Number(event.target.value))}><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="20">20 seconds</option><option value="25">25 seconds</option><option value="30">30 seconds</option></select><ChevronDown size={15} /></div></div></div><label className="check-row"><input type="checkbox" checked={denoise} onChange={event => setDenoise(event.target.checked)} /><span><strong>Clean and normalize reference audio</strong><small>Apply basic filtering and loudness normalization during extraction.</small></span></label><label className="consent-row"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} /><span>I own this voice or have the speaker’s explicit permission. I will not use it for impersonation, deception, fraud, harassment or identity-verification bypass.</span></label><div className="modal-footer"><span><LockKeyhole size={13} /> Uploaded media is processed locally.</span><button className="button button-primary" type="submit" disabled={busy || !file || !consent}>{busy ? <><Loader2 size={16} className="spin" /> Creating profile…</> : <><Plus size={16} /> Create voice profile</>}</button></div></form></div></div>;
 }

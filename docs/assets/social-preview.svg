@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">ArkByte Voice Studio</title>
+  <desc id="desc">A local-first AI voice and narration workspace with reference-conditioned generation, custom voice dataset export and local privacy controls.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111e"/><stop offset=".55" stop-color="#102b32"/><stop offset="1" stop-color="#071522"/></linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#55f2c0"/><stop offset="1" stop-color="#72d9ff"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#37e8b3" stop-opacity=".3"/><stop offset="1" stop-color="#37e8b3" stop-opacity="0"/></radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#9cebd5" stroke-opacity=".05"/></pattern>
+    <filter id="blur"><feGaussianBlur stdDeviation="28"/></filter>
+  </defs>
+  <rect width="1280" height="640" rx="32" fill="url(#bg)"/>
+  <rect width="1280" height="640" rx="32" fill="url(#grid)"/>
+  <ellipse cx="1030" cy="320" rx="360" ry="280" fill="url(#glow)" filter="url(#blur)"/>
+  <g transform="translate(82 76)">
+    <rect width="66" height="66" rx="19" fill="#183d3d" stroke="#55f2c0" stroke-opacity=".7"/>
+    <path d="M14 35h8l6-15 8 31 8-38 8 27h8" fill="none" stroke="url(#mint)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="170" y="105" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="800" letter-spacing="4" fill="#dff8ef">ARKBYTE</text>
+  <text x="170" y="137" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="3" fill="#8fb3b5">VOICE STUDIO</text>
+  <text x="82" y="258" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="58" font-weight="800" fill="#f2f7f7">Your voice.</text>
+  <text x="82" y="326" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="58" font-weight="800" fill="url(#mint)">Your local studio.</text>
+  <text x="86" y="380" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="500" fill="#b2c7cb">A local-first AI narration workspace for creators.</text>
+  <g transform="translate(84 434)">
+    <rect width="232" height="48" rx="24" fill="#55f2c0" fill-opacity=".13" stroke="#55f2c0" stroke-opacity=".4"/>
+    <text x="116" y="30" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" fill="#6cf1c4">LOCAL INFERENCE</text>
+    <rect x="250" width="245" height="48" rx="24" fill="#72d9ff" fill-opacity=".1" stroke="#72d9ff" stroke-opacity=".35"/>
+    <text x="372" y="30" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" fill="#83def8">VOICE DATASET EXPORT</text>
+  </g>
+  <g transform="translate(775 190)">
+    <circle cx="180" cy="180" r="180" fill="none" stroke="#55f2c0" stroke-opacity=".16" stroke-width="2"/>
+    <circle cx="180" cy="180" r="145" fill="none" stroke="#72d9ff" stroke-opacity=".16" stroke-width="2" stroke-dasharray="8 10"/>
+    <rect x="82" y="80" width="196" height="196" rx="46" fill="#102f36" stroke="#55f2c0" stroke-opacity=".6" stroke-width="2"/>
+    <path d="M105 180h17l12-34 17 68 17-86 17 66 17-31 17 17h20" fill="none" stroke="url(#mint)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="180" y="318" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="3" fill="#8bb9b5">CREATOR CONTROL</text>
+    <g fill="#55f2c0" opacity=".8"><circle cx="180" cy="-4" r="5"/><circle cx="356" cy="180" r="5"/><circle cx="180" cy="356" r="5"/></g>
+  </g>
+  <path d="M0 574C250 520 430 656 680 584S1030 520 1280 580" fill="none" stroke="#55f2c0" stroke-opacity=".14" stroke-width="2"/>
+</svg>

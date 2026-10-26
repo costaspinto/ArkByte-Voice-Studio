@@ -3,7 +3,7 @@ export type Health = {
   app: string;
   version: string;
   localOnly: boolean;
-  engine: { installed: boolean; loaded: boolean; device: string; torch: boolean; cuda: boolean };
+  engine: { installed: boolean; loaded: boolean; device: string; torch: boolean; cuda: boolean; gpu_vram_gb?: number | null };
   media: { ffmpeg: boolean; ffprobe: boolean };
   database: { status: string };
   message?: string;
@@ -66,7 +66,7 @@ export type StudioProject = {
   exaggeration: number;
   cfg_weight: number;
   temperature: number;
-  model_id?: "chatterbox" | "voxcpm2";
+  model_id?: "chatterbox" | "voxcpm05" | "voxcpm2";
   created_at: string;
   updated_at: string;
 };

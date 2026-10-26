@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="700" viewBox="0 0 1600 700" role="img" aria-labelledby="t d">
+<title id="t">ArkByte creator workflow</title><desc id="d">Authorized recordings are validated and enrolled into a voice profile, transcripts are reviewed, narration is generated locally and output is kept in local history.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111e"/><stop offset=".55" stop-color="#10242d"/><stop offset="1" stop-color="#07131d"/></linearGradient>
+  <linearGradient id="mint" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#57e8b8"/><stop offset="1" stop-color="#70d9f4"/></linearGradient>
+  <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#172b3a"/><stop offset="1" stop-color="#101c2a"/></linearGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="12"/><feOffset dy="8"/><feComponentTransfer><feFuncA type="linear" slope=".28"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#8de7d0" stroke-opacity=".045"/></pattern>
+</defs>
+<rect width="1600" height="700" rx="34" fill="url(#bg)"/><rect width="1600" height="700" rx="34" fill="url(#grid)"/>
+<text x="70" y="78" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="750" fill="#67e4bd" text-anchor="start" letter-spacing="2.6">FROM REFERENCE TO NARRATION</text>
+<text x="70" y="132" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="36" font-weight="750" fill="#f0f6f6" text-anchor="start" letter-spacing="0">A traceable, review-first creator workflow</text>
+<text x="70" y="170" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="450" fill="#a6bac3" text-anchor="start" letter-spacing="0">Each stage validates the input before audio is written to the local workspace.</text>
+<g filter="url(#shadow)"><rect x="70" y="285" width="220" height="250" rx="24" fill="url(#card)" stroke="#70d9f4" stroke-opacity=".42" stroke-width="2"/><circle cx="108" cy="327" r="21" fill="#70d9f4" fill-opacity=".14" stroke="#70d9f4" stroke-opacity=".65"/><text x="108" y="333" fill="#70d9f4" font-size="14" font-family="Inter,Segoe UI,Arial" font-weight="800" text-anchor="middle">01</text></g>
+<text x="95" y="390" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" fill="#70d9f4" text-anchor="start" letter-spacing="1.1">AUTHORIZE</text>
+<text x="95" y="436" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">Use a voice you own</text>
+<text x="95" y="463" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">or have permission to use.</text>
+<path d="M302 410h58m-15 -14l15 14-15 14" fill="none" stroke="#5ce5bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g filter="url(#shadow)"><rect x="380" y="285" width="220" height="250" rx="24" fill="url(#card)" stroke="#5ce5bf" stroke-opacity=".42" stroke-width="2"/><circle cx="418" cy="327" r="21" fill="#5ce5bf" fill-opacity=".14" stroke="#5ce5bf" stroke-opacity=".65"/><text x="418" y="333" fill="#5ce5bf" font-size="14" font-family="Inter,Segoe UI,Arial" font-weight="800" text-anchor="middle">02</text></g>
+<text x="405" y="390" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" fill="#5ce5bf" text-anchor="start" letter-spacing="1.1">ENROL</text>
+<text x="405" y="436" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">Validate media and create</text>
+<text x="405" y="463" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">a managed voice profile.</text>
+<path d="M612 410h58m-15 -14l15 14-15 14" fill="none" stroke="#5ce5bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g filter="url(#shadow)"><rect x="690" y="285" width="220" height="250" rx="24" fill="url(#card)" stroke="#9f9bff" stroke-opacity=".42" stroke-width="2"/><circle cx="728" cy="327" r="21" fill="#9f9bff" fill-opacity=".14" stroke="#9f9bff" stroke-opacity=".65"/><text x="728" y="333" fill="#9f9bff" font-size="14" font-family="Inter,Segoe UI,Arial" font-weight="800" text-anchor="middle">03</text></g>
+<text x="715" y="390" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" fill="#9f9bff" text-anchor="start" letter-spacing="1.1">REVIEW</text>
+<text x="715" y="436" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">Inspect sample quality;</text>
+<text x="715" y="463" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">review and save transcripts.</text>
+<path d="M922 410h58m-15 -14l15 14-15 14" fill="none" stroke="#5ce5bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g filter="url(#shadow)"><rect x="1000" y="285" width="220" height="250" rx="24" fill="url(#card)" stroke="#f2bd73" stroke-opacity=".42" stroke-width="2"/><circle cx="1038" cy="327" r="21" fill="#f2bd73" fill-opacity=".14" stroke="#f2bd73" stroke-opacity=".65"/><text x="1038" y="333" fill="#f2bd73" font-size="14" font-family="Inter,Segoe UI,Arial" font-weight="800" text-anchor="middle">04</text></g>
+<text x="1025" y="390" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" fill="#f2bd73" text-anchor="start" letter-spacing="1.1">GENERATE</text>
+<text x="1025" y="436" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">Choose a model and script;</text>
+<text x="1025" y="463" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">acknowledge responsible use.</text>
+<path d="M1232 410h58m-15 -14l15 14-15 14" fill="none" stroke="#5ce5bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<g filter="url(#shadow)"><rect x="1310" y="285" width="220" height="250" rx="24" fill="url(#card)" stroke="#5ce5bf" stroke-opacity=".42" stroke-width="2"/><circle cx="1348" cy="327" r="21" fill="#5ce5bf" fill-opacity=".14" stroke="#5ce5bf" stroke-opacity=".65"/><text x="1348" y="333" fill="#5ce5bf" font-size="14" font-family="Inter,Segoe UI,Arial" font-weight="800" text-anchor="middle">05</text></g>
+<text x="1335" y="390" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" fill="#5ce5bf" text-anchor="start" letter-spacing="1.1">PERSIST</text>
+<text x="1335" y="436" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">Store narration and history</text>
+<text x="1335" y="463" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" fill="#c2d1d6" text-anchor="start" letter-spacing="0">inside local app data.</text>
+<rect x="70" y="590" width="1460" height="55" rx="18" fill="#57e8b8" fill-opacity=".08" stroke="#57e8b8" stroke-opacity=".32"/>
+<text x="95" y="624" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="800" fill="#67e4bd" text-anchor="start" letter-spacing="1.5">DATA BOUNDARY</text>
+<text x="270" y="624" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="550" fill="#d6e6e6" text-anchor="start" letter-spacing="0">Original recordings, generated files and the SQLite database stay under the local application data directory.</text>
+</svg>

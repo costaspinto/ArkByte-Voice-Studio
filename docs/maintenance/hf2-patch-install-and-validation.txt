@@ -1,0 +1,39 @@
+ARKBYTE VOICE STUDIO WEB 1.2.0 — MAINTENANCE PATCH HF2
+
+APPLY AS AN OVERLAY
+
+1. Stop the app using STOP ARKBYTE VOICE STUDIO WEB.cmd.
+2. Extract this ZIP into the existing project folder:
+   C:\Users\costa\Projects\ArkByte Voice Studio Web 1.2.0
+   Choose Merge/Overwrite. Do not replace the whole project.
+3. Run RUN ARKBYTE VOICE STUDIO.cmd from the project folder. The runner validates the configured Python runtime, checks pip consistency, runs backend tests, runs the frontend typecheck and production build against your installed dependencies, and launches the app only after checks pass.
+4. Open http://127.0.0.1:3000 and test the History and Script Studio pages.
+
+HISTORY CONTROLS
+
+- Use the trash icon beside one history row to permanently remove that history record and its generated audio file.
+- Use Clear history to delete all generation history and generated audio files. A confirmation is shown before the request.
+- Neither operation deletes voice profiles, original reference recordings, saved projects, model weights, caches, or unrelated files.
+- Bulk clear is rejected while a generation is queued or running, to avoid racing output creation.
+- The backend resolves each output path and requires it to remain inside the ArkByte outputs directory. Invalid/outside paths are rejected. The bulk operation validates every path before it starts deleting files.
+- This uses ordinary filesystem deletion. It is not forensic secure erase; backups, snapshots and exported copies may remain.
+
+RESPONSIBLE-USE SAFEGUARDS
+
+- Existing profile-creation and enrolment consent checks remain required. The acknowledgement wording now explicitly rejects unauthorised cloning and misuse.
+- Every generation request must also send rights_ack=true. The API rejects requests without this explicit acknowledgement and checks that the selected profile has a stored consent acknowledgement.
+- The UI prohibits agreement to use generated speech for impersonation, deception, fraud, harassment, non-consensual intimate content or identity/biometric-verification bypass, and asks for synthetic-speech disclosure where listeners could be misled.
+- The full policy is in docs/SAFE-USE-POLICY.md.
+- These are user-attestation and deterrence controls, not proof of identity, legal advice or a guarantee that misuse is impossible. A person controlling the local machine may modify local software. The operator remains responsible for consent, applicable law and platform rules.
+
+VALIDATION PERFORMED IN THE SOURCE VALIDATION ENVIRONMENT
+
+- Backend tests: 58 passed. This includes single-item deletion, bulk deletion, path traversal rejection, preservation of profiles/projects, rejection of bulk clear during active generation, and generation permission gates.
+- Python import/compile validation: passed through the backend test run.
+- TypeScript/TSX syntax parsing: passed for studio-shell.tsx, voice-lab.tsx and the Next.js API proxy route.
+- Next.js full typecheck/production build: not run in this environment because the source bundle did not include web/node_modules. The one-click runner performs these checks on your Windows installation.
+- Live Windows PowerShell execution and real VoxCPM inference on the RTX 3050: not performed here.
+
+PRESERVE LOCAL DATA
+
+Do not delete or replace .venv-cuda-test, python-runtime.txt, web/.env.local, %LOCALAPPDATA%\ArkByte Voice Studio, voice references, model caches or generated outputs during patching. None of those user-specific assets is included in this patch.

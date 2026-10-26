@@ -17,7 +17,7 @@ from .speaker_identity import EcapaSpeakerEvaluator
 from .storage import Storage
 from .text_processing import validate_script
 from .transcription import FasterWhisperTranscriber
-from .voxcpm_engine import VoxCPM2Engine
+from .voxcpm_engine import VoxCPM05Engine, VoxCPM2Engine
 
 
 class VoiceStudioService:
@@ -27,8 +27,10 @@ class VoiceStudioService:
         self.paths = ensure_app_dirs()
         self.engine = ChatterboxEngine(logger)
         self.voxcpm = VoxCPM2Engine(logger)
+        self.voxcpm05 = VoxCPM05Engine(logger)
         self.speaker_evaluator = EcapaSpeakerEvaluator(logger)
         self.transcriber = FasterWhisperTranscriber(self.paths["cache"] / "faster-whisper", logger)
+        self._cleanup_quarantined_profiles()
         self.last_model = "chatterbox"
         self.last_device = "not loaded"
 
@@ -280,16 +282,76 @@ class VoiceStudioService:
         self.storage.set_profile_anchor(profile_id, sample_id)
         self.storage.set_profile_reference(profile_id, sample["model_reference_path"])
 
-    def delete_profile(self, profile_id: str) -> None:
+    def _cleanup_quarantined_profiles(self) -> None:
+        """Retry removal of profile folders quarantined by an earlier deletion."""
+        quarantine_root = self.paths["temp"]
+        for candidate in quarantine_root.glob("profile-delete-*"):
+            try:
+                safe_candidate = ensure_within(quarantine_root, candidate)
+                if safe_candidate.is_dir():
+                    shutil.rmtree(safe_candidate)
+                elif safe_candidate.exists():
+                    safe_candidate.unlink()
+            except Exception:
+                self.logger.warning("A previously deleted voice profile still has files awaiting cleanup", exc_info=True)
+
+    def delete_profile(self, profile_id: str) -> bool:
+        """Delete one profile and all ArkByte-managed source/reference assets.
+
+        Returns False only when the DB/profile is removed but Windows prevents
+        final deletion of the quarantined files. The next service start retries.
+        Generated narrations, projects, model caches and user-exported ZIPs are
+        deliberately not part of a voice profile folder and are preserved.
+        """
         if not re.fullmatch(r"[a-f0-9]{32}", profile_id or ""):
             raise AppError("The selected voice profile identifier is invalid.", "PROFILE_ID_INVALID")
         profile = self.storage.get_profile(profile_id)
         if not profile:
             raise AppError("That voice profile no longer exists.", "PROFILE_NOT_FOUND")
-        profile_dir = ensure_within(self.paths["profiles"], self.paths["profiles"] / profile_id)
-        self.storage.delete_profile(profile_id)
-        shutil.rmtree(profile_dir, ignore_errors=True)
-        self.logger.info("Deleted voice profile %s", profile_id)
+
+        profiles_root = self.paths["profiles"].resolve()
+        profile_dir = ensure_within(profiles_root, profiles_root / profile_id)
+        # Verify every database-recorded voice asset is physically inside this
+        # profile's own directory. Never follow a malformed path into user data.
+        recorded_paths = [profile.get("reference_path", "")]
+        for sample in self.storage.list_voice_samples(profile_id):
+            recorded_paths.extend([sample.get("original_path", ""), sample.get("model_reference_path", "")])
+        for raw_path in recorded_paths:
+            if raw_path:
+                try:
+                    ensure_within(profile_dir, Path(raw_path))
+                except (ValueError, OSError) as exc:
+                    raise AppError("This voice profile contains a reference path outside its managed folder. Nothing was deleted.", "PROFILE_PATH_UNSAFE") from exc
+
+        quarantine_root = self.paths["temp"].resolve()
+        quarantine_root.mkdir(parents=True, exist_ok=True)
+        quarantine_dir = ensure_within(quarantine_root, quarantine_root / f"profile-delete-{profile_id}-{uuid.uuid4().hex}")
+        moved = False
+        if profile_dir.exists():
+            if not profile_dir.is_dir():
+                raise AppError("The voice profile storage path is not a directory. Nothing was deleted.", "PROFILE_STORAGE_INVALID")
+            try:
+                profile_dir.rename(quarantine_dir)
+                moved = True
+            except OSError as exc:
+                raise AppError("Windows could not safely move this voice profile for deletion. Close any program using its recordings and retry.", "PROFILE_STORAGE_BUSY") from exc
+
+        try:
+            self.storage.delete_profile(profile_id)
+        except Exception:
+            if moved and quarantine_dir.exists() and not profile_dir.exists():
+                quarantine_dir.rename(profile_dir)
+            raise
+
+        cleanup_complete = True
+        if moved:
+            try:
+                shutil.rmtree(quarantine_dir)
+            except Exception:
+                cleanup_complete = False
+                self.logger.error("Voice profile %s was removed from the library, but quarantined files need cleanup", profile_id, exc_info=True)
+        self.logger.info("Deleted voice profile %s; file_cleanup_complete=%s", profile_id, cleanup_complete)
+        return cleanup_complete
 
     def add_pronunciation(self, profile_id: str, term: str, say_as: str, notes: str = "") -> dict[str, Any]:
         if not self.storage.get_profile(profile_id):
@@ -325,11 +387,23 @@ class VoiceStudioService:
         filename = safe_stem(output_name, "narration") + ".wav"
         output = self.paths["outputs"] / f"{uuid.uuid4().hex[:8]}_{filename}"
         if model_id == "chatterbox":
+            self.voxcpm.unload()
+            self.voxcpm05.unload()
             result = self.engine.generate(spoken_script, reference, language_id, output,
                                           exaggeration, cfg_weight, temperature, progress)
             self.last_model = "chatterbox"
             self.last_device = self.engine.device
-        elif model_id == "voxcpm2":
+        elif model_id in {"voxcpm05", "voxcpm2"}:
+            if model_id == "voxcpm05" and language_id.split("-", 1)[0].lower() not in {"en", "zh"}:
+                raise AppError(
+                    "VoxCPM 0.5B currently supports English and Chinese only. Select English or Chinese, or use Chatterbox for other languages.",
+                    "VOXCPM05_LANGUAGE_UNSUPPORTED",
+                )
+            self.engine.unload()
+            if model_id == "voxcpm05":
+                self.voxcpm.unload()
+            else:
+                self.voxcpm05.unload()
             samples = self.storage.list_voice_samples(profile_id)
             anchor = next((sample for sample in samples if sample.get("is_anchor")), None)
             prompt_text = ""
@@ -338,14 +412,25 @@ class VoiceStudioService:
                     source_duration = float(anchor["analysis"].get("duration_seconds", 0))
                 except (TypeError, ValueError):
                     source_duration = 0
-                # Transcript-conditioned Hi-Fi requires the transcript to align
-                # exactly with the reference. Only trust it for clips <=30s,
-                # where the whole original is the model reference.
-                if source_duration <= 30 and anchor.get("transcript"):
+                transcript_is_reviewed = bool(anchor.get("transcript_reviewed"))
+                # Continuation cloning uses the exact transcript of the selected
+                # reference. Long originals are centrally cropped to 30 seconds,
+                # so their full-recording transcript is not a valid prompt.
+                if source_duration <= 30 and transcript_is_reviewed and anchor.get("transcript"):
                     prompt_text = str(anchor["transcript"])
-            result = self.voxcpm.generate(spoken_script, reference, output, prompt_text, progress)
-            self.last_model = "voxcpm2"
-            self.last_device = self.voxcpm.device
+            if model_id == "voxcpm05":
+                if not anchor or source_duration > 30 or not prompt_text:
+                    raise AppError(
+                        "VoxCPM 0.5B needs an anchor recording of 30 seconds or less and an exact, reviewed transcript for that complete clip. Select a suitable anchor and save its transcript in Voice Lab.",
+                        "VOXCPM05_TRANSCRIPT_REQUIRED",
+                    )
+                result = self.voxcpm05.generate(spoken_script, reference, output, prompt_text, progress)
+                self.last_model = "voxcpm05"
+                self.last_device = self.voxcpm05.device
+            else:
+                result = self.voxcpm.generate(spoken_script, reference, output, prompt_text, progress)
+                self.last_model = "voxcpm2"
+                self.last_device = self.voxcpm.device
         else:
             raise AppError("Select a supported local generation model.", "MODEL_UNSUPPORTED")
         self.storage.add_history({

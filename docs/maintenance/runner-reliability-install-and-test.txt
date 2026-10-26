@@ -1,0 +1,35 @@
+ArkByte Voice Studio 1.2.0 — Runner Reliability Hotfix
+
+Files replaced (only these project-root runner files):
+- START ARKBYTE VOICE STUDIO WEB.ps1 / .cmd
+- STOP ARKBYTE VOICE STUDIO WEB.ps1 / .cmd
+- RUN ARKBYTE VOICE STUDIO.ps1 / .cmd
+
+Additional verification:
+- VERIFY ARKBYTE RUNNERS.ps1 parses the scripts using the local Windows PowerShell parser and checks required safety/idempotency markers.
+- It does not start, stop, or modify application processes.
+
+What changed:
+1. Stop discovers live listeners on 8765/3000. It does not trust stale PIDs as the source of truth. A process is stopped only if its live executable and command line prove that it serves this exact project path on the expected loopback port.
+2. Stop re-reads the listener and process immediately before termination, prompts for the exact text STOP ARKBYTE, then verifies the project listeners have closed.
+3. Start records the actual listening process IDs (Python and Next.js node), not the transient cmd.exe launcher PID.
+4. Start is idempotent: it reports a healthy existing ArkByte instance instead of trying to create a second copy.
+5. The one-click runner returns success when both project services are already healthy; otherwise it continues to refuse unknown/partial occupied ports.
+6. No broad process-name kill is used. No CUDA, Python environment, node_modules, model caches, voice recordings, .env.local or application data are modified by this patch.
+
+Install:
+- Keep ArkByte running or stopped; replacing these script files does not modify the running process. For a clean validation, stop ArkByte first using the newly installed Stop script.
+- Run INSTALL-ARKBYTE-RUNNER-RELIABILITY.ps1 from Downloads. It defaults to C:\Users\<user>\Projects\ArkByte Voice Studio Web 1.2.0.
+- The installer backs up every replaced file to .local-backups\runner-fix-<timestamp>, applies only the listed runner files, and runs VERIFY ARKBYTE RUNNERS.ps1.
+- If verification fails, the installer restores the previous runner files.
+
+After install:
+1. Run STOP ARKBYTE VOICE STUDIO WEB.cmd. Type STOP ARKBYTE when the process identities are verified.
+2. Run VERIFY ARKBYTE RUNNERS.ps1 and confirm all checks pass.
+3. Run RUN ARKBYTE VOICE STUDIO.cmd once. It runs tests/build and starts production.
+4. Run RUN ARKBYTE VOICE STUDIO.cmd a second time only as an idempotency check. It should say ARKBYTE IS ALREADY RUNNING AND HEALTHY, with no duplicate processes.
+5. Run STOP ARKBYTE VOICE STUDIO WEB.cmd again to verify both listeners close.
+
+Limitations:
+- The source environment used to prepare this patch is not Windows PowerShell; the included VERIFY script performs the authoritative PowerShell parser check on the target PC.
+- A real start/stop lifecycle test must be performed on the user's Windows machine because it must interact with that machine's live process table and ports.

@@ -39,11 +39,27 @@ class ChatterboxEngine:
             self.logger.warning("Device detection failed: %s", exc)
         return "cpu"
 
+    def unload(self) -> None:
+        """Release the resident model so another local model can use GPU memory."""
+        self._model = None
+        self._loaded = False
+        self._device = None
+        try:
+            import gc
+            gc.collect()
+            if self._torch is None:
+                import torch
+                self._torch = torch
+            if self._torch.cuda.is_available():
+                self._torch.cuda.empty_cache()
+        except Exception as exc:
+            self.logger.debug("CUDA cache cleanup skipped: %s", exc)
+
     def load(self, progress: Progress | None = None, force_cpu: bool = False) -> None:
         if self._loaded:
             return
         if progress:
-            progress("Loading the local Chatterbox model. The first load downloads model weightsâ€¦")
+            progress("Loading the local Chatterbox model. The first load downloads model weights…")
         try:
             from chatterbox.mtl_tts import ChatterboxMultilingualTTS
         except Exception as exc:
@@ -64,7 +80,7 @@ class ChatterboxEngine:
                     "AI_LOAD_FAILED",
                 ) from exc
             if progress:
-                progress(f"{device.upper()} model loading failed. Retrying with CPUâ€¦")
+                progress(f"{device.upper()} model loading failed. Retrying with CPU…")
             try:
                 if self._torch is None:
                     import torch
@@ -97,7 +113,7 @@ class ChatterboxEngine:
         if self._device == "cpu":
             return
         if progress:
-            progress("GPU generation failed. Clearing GPU memory and retrying on CPUâ€¦")
+            progress("GPU generation failed. Clearing GPU memory and retrying on CPU…")
         try:
             if self._torch is None:
                 import torch
@@ -131,7 +147,7 @@ class ChatterboxEngine:
 
         for index, chunk in enumerate(chunks, start=1):
             if progress:
-                progress(f"Generating paragraph {index} of {len(chunks)} on {self._device.upper()}â€¦")
+                progress(f"Generating paragraph {index} of {len(chunks)} on {self._device.upper()}…")
             try:
                 audio = self._model.generate(
                     chunk,

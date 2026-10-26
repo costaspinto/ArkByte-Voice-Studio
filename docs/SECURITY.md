@@ -9,3 +9,7 @@
 - Runtime: the web edition uses its own isolated Python virtual environment; one generation worker avoids simultaneous model inference and memory spikes. Existing engine handles supported GPU-to-CPU retry.
 - Creator data: project scripts and voice profiles remain under the local ArkByte data root; no remote sync or telemetry is required.
 - Scope: a local single-user utility. Do not expose service ports to the internet or LAN. A multi-user web SaaS needs a separate authentication, tenancy, storage, authorization and job-security design.
+
+- Voice use: profile enrollment requires an ownership/permission acknowledgement; every generation request also requires a responsible-use acknowledgement. These are deterrence controls, not identity verification or a guarantee that misuse is impossible. See `SAFE-USE-POLICY.md`.
+- History deletion: individual and bulk deletion remove only validated generated files inside the ArkByte `outputs` directory and matching SQLite history rows. The API rejects paths outside that directory. Voice profiles, source references, saved projects and model caches are not touched.
+- Deletion semantics: generated files are removed using normal filesystem deletion; this is not certified forensic erasure and may not remove backups, snapshots or exported copies.

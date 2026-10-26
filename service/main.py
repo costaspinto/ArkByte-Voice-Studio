@@ -62,7 +62,7 @@ class ProjectRequest(BaseModel):
     exaggeration: float = Field(default=0.5, ge=0.25, le=2.0)
     cfg_weight: float = Field(default=0.5, ge=0.0, le=1.0)
     temperature: float = Field(default=0.8, ge=0.05, le=2.0)
-    model_id: str = Field(default="chatterbox", pattern=r"^(chatterbox|voxcpm2)$")
+    model_id: str = Field(default="chatterbox", pattern=r"^(chatterbox|voxcpm05|voxcpm2)$")
 
 
 class GenerateRequest(BaseModel):
@@ -73,11 +73,16 @@ class GenerateRequest(BaseModel):
     exaggeration: float = Field(default=0.5, ge=0.25, le=2.0)
     cfg_weight: float = Field(default=0.5, ge=0.0, le=1.0)
     temperature: float = Field(default=0.8, ge=0.05, le=2.0)
-    model_id: str = Field(default="chatterbox", pattern=r"^(chatterbox|voxcpm2)$")
+    model_id: str = Field(default="chatterbox", pattern=r"^(chatterbox|voxcpm05|voxcpm2)$")
+    rights_ack: bool = False
 
 
 class TranscriptRequest(BaseModel):
     transcript: str = Field(min_length=1, max_length=20000)
+
+
+class DeleteVoiceProfileRequest(BaseModel):
+    confirmation_phrase: str = Field(min_length=1, max_length=32)
 
 
 class PronunciationRequest(BaseModel):
@@ -268,11 +273,15 @@ def health() -> dict[str, Any]:
     torch_present = importlib.util.find_spec("torch") is not None
     torch_installed = False
     cuda = False
+    gpu_vram_gb = None
     if torch_present:
         try:
             import torch
             torch_installed = True
             cuda = bool(torch.cuda.is_available())
+            if cuda:
+                properties = torch.cuda.get_device_properties(0)
+                gpu_vram_gb = round(float(properties.total_memory) / (1024 ** 3), 2)
         except Exception as exc:
             LOGGER.warning("PyTorch import or hardware check failed: %s", exc)
     try:
@@ -291,6 +300,7 @@ def health() -> dict[str, Any]:
             "device": STUDIO.engine.device,
             "torch": torch_installed,
             "cuda": cuda,
+            "gpu_vram_gb": gpu_vram_gb,
         },
         "media": {"ffmpeg": bool(find_executable("ffmpeg")), "ffprobe": bool(find_executable("ffprobe"))},
         "database": {"status": database_status},
@@ -477,12 +487,14 @@ def delete_pronunciation(profile_id: str, entry_id: str) -> dict[str, Any]:
 @app.get("/api/v1/models", dependencies=[Depends(require_local_auth)])
 def model_registry() -> dict[str, Any]:
     identity = STUDIO.speaker_evaluator.status()
+    voxcpm_installed = STUDIO.voxcpm.is_installed()
     candidates = [
-        {"id": "chatterbox", "name": "Chatterbox Multilingual V3", "package": "chatterbox", "role": "Default local generation engine", "status": "installed" if importlib.util.find_spec("chatterbox") and importlib.util.find_spec("torch") else "not_installed", "integrated": True},
-        {"id": "voxcpm", "name": "VoxCPM 2", "package": "voxcpm", "role": "Optional reference and transcript-conditioned cloning engine", "status": "installed" if STUDIO.voxcpm.is_installed() else "not_installed", "integrated": True},
+        {"id": "chatterbox", "name": "Chatterbox Multilingual V3", "package": "chatterbox", "role": "Default multilingual reference-conditioned generation engine", "status": "installed" if importlib.util.find_spec("chatterbox") and importlib.util.find_spec("torch") else "not_installed", "integrated": True, "first_use_download": True},
+        {"id": "voxcpm05", "name": "VoxCPM 0.5B", "package": "voxcpm", "role": "Smaller English/Chinese continuation-cloning engine; requires an exact reviewed reference transcript", "status": "installed" if voxcpm_installed else "not_installed", "integrated": True, "first_use_download": True, "requires_transcript": True, "recommended_vram_gb": 5, "hardware_note": "About 5 GB VRAM in the upstream reference table; 6 GB GPUs are tight. The service unloads the previous engine before switching."},
+        {"id": "voxcpm2", "name": "VoxCPM 2 (2B)", "package": "voxcpm", "role": "Multilingual reference and transcript-conditioned cloning engine", "status": "installed" if voxcpm_installed else "not_installed", "integrated": True, "first_use_download": True, "recommended_vram_gb": 8, "hardware_note": "Upstream reports about 8 GB VRAM; 6 GB GPUs may not have enough memory."},
         {"id": "qwen3_tts", "name": "Qwen3-TTS", "package": "qwen_tts", "role": "Single-speaker Base-model fine-tuning dataset export; no in-app inference adapter", "status": "installed" if importlib.util.find_spec("qwen_tts") else "not_installed", "integrated": False},
     ]
-    return {"ok": True, "models": candidates, "speaker_identity": identity, "transcription": STUDIO.transcriber.status(), "active_model": "chatterbox", "note": "Chatterbox is the default engine. VoxCPM 2 has an optional lazy adapter. Qwen3-TTS training-data export is integrated, but fine-tuning and inference are performed in the official separate training environment. ECAPA-TDNN speaker embedding comparison and Faster-Whisper transcription are optional and load only when requested."}
+    return {"ok": True, "models": candidates, "speaker_identity": identity, "transcription": STUDIO.transcriber.status(), "active_model": STUDIO.last_model, "note": "Chatterbox is the default engine. VoxCPM 0.5B and VoxCPM 2 use the optional VoxCPM package and download their model weights on first selection. VoxCPM 0.5B requires a reviewed transcript matching a reference clip of 30 seconds or less. VoxCPM 2 is a 2B model with an approximately 8 GB VRAM recommendation. Qwen3-TTS export is integrated; Qwen inference and fine-tuning are external workflows. ECAPA-TDNN and Faster-Whisper remain optional."}
 
 
 @app.post("/api/v1/benchmarks/{history_id}/speaker-identity", dependencies=[Depends(require_local_auth)])
@@ -548,9 +560,27 @@ async def create_profile(
 
 
 @app.delete("/api/v1/profiles/{profile_id}", dependencies=[Depends(require_local_auth)])
-def delete_profile(profile_id: str) -> dict[str, Any]:
-    STUDIO.delete_profile(profile_id)
-    return {"ok": True}
+def delete_profile(profile_id: str, payload: DeleteVoiceProfileRequest) -> dict[str, Any]:
+    if payload.confirmation_phrase != "DELETE VOICE":
+        raise AppError('Type "DELETE VOICE" exactly to permanently remove this voice profile.', "DELETE_CONFIRMATION_REQUIRED")
+    if not re.fullmatch(r"[a-f0-9]{32}", profile_id or ""):
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+
+    # Keep the generation queue lock across the destructive operation. New jobs
+    # acquire this same lock before they are queued, so a profile cannot vanish
+    # between request validation and generation starting.
+    with JOBS_LOCK:
+        if any(job.get("status") in {"queued", "running"} for job in JOBS.values()):
+            raise AppError("Wait for the active generation to finish before deleting a voice profile.", "GENERATION_BUSY")
+        cleanup_complete = STUDIO.delete_profile(profile_id)
+    LOGGER.warning("Voice profile deletion requested and confirmed for %s; file_cleanup_complete=%s", profile_id, cleanup_complete)
+    return {
+        "ok": True,
+        "deleted": True,
+        "profile_id": profile_id,
+        "file_cleanup_complete": cleanup_complete,
+        "note": "ArkByte-managed source recordings, reference clips, transcripts and profile metadata were removed. Previously exported copies and generated narrations are not deleted.",
+    }
 
 
 @app.get("/api/v1/projects", dependencies=[Depends(require_local_auth)])
@@ -610,14 +640,29 @@ def delete_project(project_id: str) -> dict[str, Any]:
 
 @app.post("/api/v1/generations", dependencies=[Depends(require_local_auth)])
 def create_generation(payload: GenerateRequest) -> dict[str, Any]:
+    if not payload.rights_ack:
+        raise AppError(
+            "Confirm that you own this voice or have the speaker's explicit permission, and agree not to use generated speech for impersonation, deception, fraud, harassment or identity-verification bypass.",
+            "USE_POLICY_ACK_REQUIRED",
+        )
     if payload.language_id not in SUPPORTED_LANGUAGES.values():
         raise AppError("Select a supported narration language before generating audio.", "LANGUAGE_UNSUPPORTED")
+    if payload.model_id == "voxcpm05" and payload.language_id.split("-", 1)[0].lower() not in {"en", "zh"}:
+        raise AppError("VoxCPM 0.5B currently supports English and Chinese only. Select English or Chinese, or use Chatterbox for other languages.", "VOXCPM05_LANGUAGE_UNSUPPORTED")
+    profile = STORAGE.get_profile(payload.profile_id)
+    if not profile or not bool(profile.get("consent_ack")):
+        raise AppError("The selected voice profile has no valid permission confirmation. Re-enrol a voice you own or have permission to use.", "VOICE_PERMISSION_REQUIRED")
     if payload.model_id == "chatterbox" and (not importlib.util.find_spec("chatterbox") or not importlib.util.find_spec("torch")):
         raise AppError("The local Chatterbox AI engine is not installed. Run INSTALL_WEB_WINDOWS.ps1 -InstallAI, then restart the services.", "AI_NOT_INSTALLED")
-    if payload.model_id == "voxcpm2" and not STUDIO.voxcpm.is_installed():
-        raise AppError("VoxCPM 2 is not installed. It is an optional model and should be set up in a cloned environment before use. Chatterbox remains available.", "VOXCPM_NOT_INSTALLED")
+    if payload.model_id in {"voxcpm05", "voxcpm2"} and not STUDIO.voxcpm.is_installed():
+        raise AppError("The optional VoxCPM package is not installed. Run INSTALL VOXCPM MODELS.ps1 after reviewing its dependency report, then restart ArkByte. Chatterbox remains available.", "VOXCPM_NOT_INSTALLED")
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
+        # Recheck under the same lock used by profile deletion to close the
+        # validation/deletion race before a new job is queued.
+        current_profile = STORAGE.get_profile(payload.profile_id)
+        if not current_profile or not bool(current_profile.get("consent_ack")):
+            raise AppError("The selected voice profile was removed or no longer has a valid permission confirmation. Choose another profile.", "VOICE_PERMISSION_REQUIRED")
         if any(job.get("status") in {"queued", "running"} for job in JOBS.values()):
             raise AppError("A narration is already being generated. Wait for it to finish before starting another job.", "GENERATION_BUSY")
         if len(JOBS) > 300:
@@ -625,6 +670,7 @@ def create_generation(payload: GenerateRequest) -> dict[str, Any]:
                 if JOBS[old_id].get("status") in {"complete", "failed"}:
                     JOBS.pop(old_id, None)
         JOBS[job_id] = {"id": job_id, "status": "queued", "progress": 0.0, "message": "Waiting for the local generation worker…"}
+    LOGGER.info("Generation rights attestation accepted for job %s using model %s", job_id, payload.model_id)
     GENERATOR.submit(run_generation, job_id, payload)
     return {"ok": True, "job": JOBS[job_id]}
 
@@ -643,6 +689,74 @@ def generation_status(job_id: str) -> dict[str, Any]:
 @app.get("/api/v1/history", dependencies=[Depends(require_local_auth)])
 def history() -> dict[str, Any]:
     return {"ok": True, "history": [history_public(item) for item in STORAGE.list_history(200)]}
+
+
+@app.delete("/api/v1/history/{history_id}", dependencies=[Depends(require_local_auth)])
+def delete_history_item(history_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[a-f0-9]{32}", history_id or ""):
+        raise HTTPException(status_code=404, detail="History item not found")
+    item = STORAGE.get_history(history_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="History item not found")
+    try:
+        output_path = ensure_within(DATA_PATHS["outputs"], Path(item["output_path"]))
+    except Exception as exc:
+        LOGGER.warning("Blocked deletion of history %s with an invalid output path", history_id)
+        raise HTTPException(status_code=409, detail="The stored audio path is outside the ArkByte outputs folder; nothing was deleted.") from exc
+    if output_path.exists() and not output_path.is_file():
+        raise HTTPException(status_code=409, detail="The stored output is not a regular file; nothing was deleted.")
+    try:
+        output_path.unlink(missing_ok=True)
+    except OSError as exc:
+        LOGGER.exception("Could not delete generated audio for history %s", history_id)
+        raise HTTPException(status_code=500, detail="The audio file could not be deleted. The history entry was retained.") from exc
+    STORAGE.delete_history(history_id)
+    with JOBS_LOCK:
+        for job in JOBS.values():
+            if job.get("history_id") == history_id:
+                job["history_id"] = None
+                job["audio_url"] = None
+    LOGGER.info("Deleted generation history item %s and its output", history_id)
+    return {"ok": True, "deleted": 1}
+
+
+@app.delete("/api/v1/history", dependencies=[Depends(require_local_auth)])
+def clear_generation_history() -> dict[str, Any]:
+    with JOBS_LOCK:
+        if any(job.get("status") in {"queued", "running"} for job in JOBS.values()):
+            raise HTTPException(status_code=409, detail="Wait for the active generation to finish before clearing all history.")
+    items = STORAGE.list_all_history()
+    # Validate every persisted path before deleting anything. Never follow a path
+    # outside the app's outputs directory, even if its DB row is malformed.
+    paths: list[tuple[str, Path]] = []
+    for item in items:
+        try:
+            output_path = ensure_within(DATA_PATHS["outputs"], Path(item["output_path"]))
+        except Exception as exc:
+            LOGGER.warning("Blocked bulk history deletion due to invalid output path in %s", item.get("id"))
+            raise HTTPException(status_code=409, detail="At least one history entry points outside the ArkByte outputs folder. Nothing was deleted.") from exc
+        if output_path.exists() and not output_path.is_file():
+            raise HTTPException(status_code=409, detail="At least one stored output is not a regular file. Nothing was deleted.")
+        paths.append((item["id"], output_path))
+
+    deleted = 0
+    for history_id, output_path in paths:
+        try:
+            output_path.unlink(missing_ok=True)
+        except OSError as exc:
+            LOGGER.exception("Bulk history deletion stopped at item %s", history_id)
+            raise HTTPException(status_code=500, detail=f"History deletion stopped after {deleted} item(s); the remaining entries were retained.") from exc
+        STORAGE.delete_history(history_id)
+        deleted += 1
+
+    deleted_ids = {history_id for history_id, _ in paths}
+    with JOBS_LOCK:
+        for job in JOBS.values():
+            if job.get("history_id") in deleted_ids:
+                job["history_id"] = None
+                job["audio_url"] = None
+    LOGGER.info("Cleared %s generation history item(s); voice profiles and projects were retained", deleted)
+    return {"ok": True, "deleted": deleted}
 
 
 @app.get("/api/v1/audio/{history_id}", dependencies=[Depends(require_local_auth)])

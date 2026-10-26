@@ -65,5 +65,57 @@ class VoxCPMEngineTests(unittest.TestCase):
             self.assertEqual(getattr(caught.exception, "code", None), "PROFILE_AUDIO_MISSING")
 
 
+    def test_voxcpm05_requires_reference_and_exact_transcript(self):
+        from arkbyte_voice_studio.voxcpm_engine import VoxCPM05Engine
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = VoxCPM05Engine(logging.getLogger("test"))
+            missing = Path(tmp) / "missing.wav"
+            with self.assertRaises(Exception) as caught:
+                engine.generate("Hello", missing, Path(tmp) / "out.wav", "Hello")
+            self.assertEqual(getattr(caught.exception, "code", None), "PROFILE_AUDIO_MISSING")
+            reference = Path(tmp) / "reference.wav"
+            reference.write_bytes(b"not decoded by fake model")
+            with self.assertRaises(Exception) as caught:
+                engine.generate("Hello", reference, Path(tmp) / "out.wav", "  ")
+            self.assertEqual(getattr(caught.exception, "code", None), "VOXCPM05_TRANSCRIPT_REQUIRED")
+
+    def test_voxcpm05_adapter_uses_reference_and_verified_prompt_text(self):
+        import sys
+        import types
+        from unittest.mock import patch
+        from arkbyte_voice_studio.voxcpm_engine import VoxCPM05Engine
+
+        class FakeModel:
+            def __init__(self):
+                self.calls = []
+                self.tts_model = types.SimpleNamespace(sample_rate=16000)
+            def generate(self, **kwargs):
+                self.calls.append(kwargs)
+                return np.zeros(16000, dtype=np.float32)
+
+        class FakeVoxCPM:
+            model = FakeModel()
+            @classmethod
+            def from_pretrained(cls, *args, **kwargs):
+                cls.load_args = (args, kwargs)
+                return cls.model
+
+        fake_module = types.SimpleNamespace(VoxCPM=FakeVoxCPM)
+        with tempfile.TemporaryDirectory() as tmp:
+            reference = Path(tmp) / "reference.wav"
+            reference.write_bytes(b"placeholder")
+            output = Path(tmp) / "out.wav"
+            engine = VoxCPM05Engine(logging.getLogger("test"))
+            with patch.object(VoxCPM05Engine, "is_installed", return_value=True), patch.dict(sys.modules, {"voxcpm": fake_module}):
+                engine.generate("Generated sentence.", reference, output, "Exact prompt transcript.")
+            self.assertTrue(output.is_file())
+            self.assertEqual(FakeVoxCPM.load_args[0], ("openbmb/VoxCPM-0.5B",))
+            self.assertFalse(FakeVoxCPM.load_args[1]["optimize"])
+            self.assertEqual(FakeVoxCPM.model.calls[0]["prompt_text"], "Exact prompt transcript.")
+            self.assertEqual(FakeVoxCPM.model.calls[0]["prompt_wav_path"], str(reference))
+            with wave.open(str(output), "rb") as wav:
+                self.assertEqual(wav.getframerate(), 16000)
+
+
 if __name__ == "__main__":
     unittest.main()

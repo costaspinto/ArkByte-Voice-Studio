@@ -1,398 +1,440 @@
-# ArkByte Voice Studio — Web Edition 1.2.0
+# ArkByte Voice Studio
 
-**A local-first AI narration workspace for creators.** Import recordings you own or are authorized to use, create reusable voice profiles, write and save narration projects, generate speech with a local Chatterbox engine, and manage your audio history — without paid speech APIs, subscriptions, usage credits, or a hosted database.
+<p align="center">
+  <strong>A local-first AI voice studio for voice generation, reference-guided voice workflows, and model experimentation.</strong>
+</p>
 
-> **Scope:** This repository is a single-user local application. The Next.js UI binds to `127.0.0.1:3000`; the FastAPI bridge binds to `127.0.0.1:8765`. It is not a public multi-tenant SaaS deployment and must not be exposed to a LAN or the internet without a separate security redesign.
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?logo=next.js">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/Status-Active%20Development-orange">
+</p>
 
-## Product overview
+ArkByte Voice Studio brings a browser-based studio together with a Python inference service and pluggable speech-model integrations. The application is designed to keep local inference and user-controlled voice assets close to the machine, while exposing a structured interface for model selection, generation, and experimentation.
 
-ArkByte Voice Studio is designed for creators who already have recordings and want to produce future narration without recording each script from scratch. A voice profile is created from a short reference segment extracted from an imported video or audio file. The local TTS engine uses that reference when generating a narration.
+> **Project status:** Active development. Model quality, supported hardware, and available controls depend on the selected model adapter and local runtime. Do not interpret a successful build or test run as a guarantee of identical output quality across machines.
 
-### Current capabilities
+## Contents
 
-- **Creator dashboard:** live local-service health, voice/profile counts, saved-project count, recent generations and readiness indicators.
-- **Voice library:** retain the original audio/video source and create a reusable reference profile. Legacy one-reference profiles remain supported.
-- **Voice Lab (new):** enrol up to ten recordings per voice profile, add recordings later, retain original media, create separate non-denoised 24 kHz references, inspect acoustic quality metrics, and choose the reference anchor manually.
-- **Voice intelligence pipeline:** show consent, quality-analysis, transcript-review, optional speaker-identity, speaker-confirmed accent, basic prosody and reference-selection status without marking missing stages as complete.
-- **Optional local transcription:** use Faster-Whisper to draft transcripts, then manually review and save each one before training export. Model weights are fetched only on first use.
-- **Personal pronunciation dictionary:** map names, acronyms and difficult written terms to speaker-confirmed spoken forms before generation.
-- **Benchmark Studio:** A/B playback of the active reference and saved output, acoustic proxy comparisons, and optional ECAPA-TDNN speaker-embedding comparison when SpeechBrain and its pretrained weights are available.
-- **Qwen3-TTS dataset export:** export full source utterances, user-reviewed transcripts and a shared reference in the official single-speaker training-data JSONL layout. Model fine-tuning remains a separate opt-in workflow.
-- **Optional VoxCPM 2 adapter:** an isolated, lazy-loaded generation adapter using reference-only or transcript-conditioned reference cloning. It is not installed by the base installer.
-- **Consent guard:** profile creation requires the user to confirm that they own the voice or have explicit permission from the speaker.
-- **Script Studio:** up to 50,000 characters, language selection, output filename, expression/CFG/temperature controls, script duration estimate and generation progress.
-- **Persistent Projects library:** save and reopen scripts together with voice choice, language, output name and generation settings. Projects are stored in SQLite, not only in browser storage. Project lists return compact summaries; full scripts are fetched only when a project is opened.
-- **Generation queue:** one local generation worker prevents concurrent model jobs from competing for GPU memory. Job status is polled by the browser.
-- **Generation history:** review completed narrations, preview local WAV output and download it.
-- **System health:** verify Python service, database integrity, Chatterbox/PyTorch availability, CUDA availability, FFmpeg and FFprobe.
-- **Local-first privacy:** no mandatory account, hosted database, paid API key or cloud inference endpoint.
-- **Windows setup scripts:** prerequisite detection, isolated Python environment, optional AI dependency installation, generated local bridge credentials, diagnostics, start/stop and production build scripts.
+- [Highlights](#highlights)
+- [Product walkthrough](#product-walkthrough)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Detailed system flow](#detailed-system-flow)
+- [Voice generation lifecycle](#voice-generation-lifecycle)
+- [Custom voice workflow](#custom-voice-workflow)
+- [Technology stack](#technology-stack)
+- [Local setup](#local-setup)
+- [Run the application](#run-the-application)
+- [Validation and test results](#validation-and-test-results)
+- [Repository layout](#repository-layout)
+- [Security and responsible use](#security-and-responsible-use)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [Development roadmap](#development-roadmap)
 
-### Explicitly not included in this release
+## Highlights
 
-This release does not claim to provide a multitrack DAW, automatic speaker diarization, automatic music separation, verified ASR transcripts without user review, phoneme alignment, automatic accent classification, learned speaker-specific prosody adaptation, in-app Qwen3-TTS inference/fine-tuning, subtitle generation, YouTube publishing, multi-user accounts, cloud synchronization, or a public SaaS control plane. The built-in quality metrics and ECAPA cosine similarity are diagnostic signals, not proof of exact voice identity or accent fidelity.
+- **Browser-based studio:** a Next.js and TypeScript interface for interacting with the voice service.
+- **Python inference service:** a dedicated backend that isolates model execution and audio-processing concerns from the frontend.
+- **Model adapter architecture:** model-specific integrations are separated behind adapter/engine boundaries to make experimentation and maintenance easier.
+- **Local inference path:** supports a local Python runtime, including a CUDA-enabled environment where compatible hardware and drivers are available.
+- **Voice experimentation:** custom voice and reference-audio workflows are organized through the Custom Voice Lab.
+- **Operational scripts:** PowerShell and CMD launch, stop, verification, and model-installation helpers support Windows development.
+- **Validation-first workflow:** backend tests, TypeScript checks, and a production frontend build are part of the verification process.
 
-## Technology stack
+## Product walkthrough
 
-| Layer | Technology | Responsibility |
-|---|---|---|
-| Web UI | Next.js 16.4.3, React 19.3.1, TypeScript | Local creator workspace and server-side API proxy |
-| UI styling | Custom CSS, responsive layout, CSS motion, Lucide icons | Branded dark interface, accessibility and reduced-motion support |
-| Local API | Python 3.12/3.13, FastAPI, Uvicorn, Pydantic | Validation, local authentication, jobs and media operations |
-| Persistence | SQLite (WAL, busy timeout, bound SQL parameters) | Profiles, history and saved narration projects |
-| Voice engines | Chatterbox Multilingual V3; optional VoxCPM 2 adapter | Local reference-conditioned speech generation |
-| Voice identity evaluation | Optional SpeechBrain ECAPA-TDNN | Speaker embeddings and cosine comparison; optional pretrained weights |
-| Adaptation data | Qwen3-TTS single-speaker JSONL export | Training dataset generation; training is performed separately |
-| Media processing | FFmpeg / FFprobe | Extract and prepare reference audio |
-| Runtime | Local CPU or compatible CUDA GPU | Inference without a paid API |
+[Watch the ArkByte Voice Studio walkthrough](docs/assets/video/ArkByte-Voice-Studio-Walkthrough.mp4)
 
-The versions in `web/package.json` are pinned at the top level. Next.js 16.4.3 and React 19.3.1 are stable releases at the time this release was prepared; use supported LTS Node.js (22 LTS recommended). See the [Next.js release information](https://www.npmjs.com/package/next) and [React versions](https://react.dev/versions).
+## Screenshots
+
+The following screenshots showcase the current application interface and workflows.
+
+### Application overview
+
+![ArkByte Voice Studio overview](docs/assets/screenshots/00-overview.png)
+
+### Studio and voice workflows
+
+| Voice Lab | Generation History |
+|---|---|
+| ![Voice Lab](docs/assets/screenshots/01-voice-lab.png) | ![Generation History](docs/assets/screenshots/02-generation-history.png) |
+
+| Custom Voice Lab | Script Studio |
+|---|---|
+| ![Custom Voice Lab](docs/assets/screenshots/03-custom-voice-lab.png) | ![Script Studio](docs/assets/screenshots/04-script-studio.png) |
+
+### Settings and application management
+
+| Settings and Health | About ArkByte |
+|---|---|
+| ![Settings and Health](docs/assets/screenshots/05-settings-health.png) | ![About ArkByte](docs/assets/screenshots/06-about-arkbyte.png) |
+
+![Voice profile deletion workflow](docs/assets/screenshots/07-voice-profile-delete.png)
+
+### Additional walkthrough captures
+
+![Studio interface](docs/assets/screenshots/01-studio-overview.jpg)
+
+![Voice and model selection](docs/assets/screenshots/02-voice-selection.jpg)
+
+![Speech generation workflow](docs/assets/screenshots/03-generation-workflow.jpg)
+
+![Custom Voice Lab](docs/assets/screenshots/04-custom-voice-lab.jpg)
+
+![Output and playback](docs/assets/screenshots/05-output-and-playback.jpg)
 
 ## Architecture
 
+The system is split into four primary layers:
+
+1. **Presentation layer** â€” Next.js pages and React components render the studio and collect user input.
+2. **API boundary** â€” the Next.js API route proxies supported requests to the local Python service and applies the configured bridge boundary.
+3. **Application and orchestration layer** â€” the Python service validates requests, coordinates voice operations, and selects the appropriate engine or adapter.
+4. **Inference and asset layer** â€” model runtimes perform inference; audio and application data are handled by the relevant service/storage components.
+
+```mermaid
+flowchart TB
+    U[User] --> UI[Next.js Studio UI]
+    UI --> API[Next.js API Route]
+    API -->|Authenticated local bridge request| SVC[Python API Service]
+    SVC --> VAL[Request validation and orchestration]
+    VAL --> REG[Model / Engine Adapter]
+    REG --> CH[Chatterbox Engine]
+    REG --> VX[VoxCPM Engine]
+    REG --> OTHER[Other supported adapters]
+    CH --> INF[Local model runtime]
+    VX --> INF
+    OTHER --> INF
+    INF --> POST[Audio post-processing]
+    POST --> STORE[Configured output / application storage]
+    STORE --> SVC
+    SVC --> API
+    API --> UI
+    UI --> OUT[Playback / download]
+```
+
+### Component responsibilities
+
+| Component | Responsibility |
+|---|---|
+| `web/` | Next.js application, UI components, frontend types, and API proxy route |
+| `service/` | Python API, application services, model engines, storage, and backend tests |
+| `docs/` | Setup, architecture, model, security, testing, and release documentation |
+| `START*` / `RUN*` scripts | Windows startup entry points |
+| `STOP*` scripts | Controlled shutdown of verified ArkByte listeners |
+| `VERIFY*` scripts | Runtime and launcher diagnostics |
+| `INSTALL*` scripts | Optional model/runtime setup helpers |
+
+The diagram describes the intended request path. Exact adapter availability and optional components depend on the checked-out version and installed model dependencies.
+
+## Detailed system flow
+
+### 1. Application startup and readiness
+
 ```mermaid
 flowchart TD
-    U[Creator in local browser] --> N[Next.js UI :3000]
-    N --> P[Same-origin API proxy]
-    P -->|127.0.0.1 + server-only token| F[FastAPI bridge :8765]
-    F --> S[VoiceStudioService]
-    S --> E[Chatterbox engine]
-    E --> G[CUDA when available]
-    E --> C[CPU fallback]
-    F --> DB[(SQLite: profiles, history, projects)]
-    F --> M[FFmpeg / FFprobe]
-    S --> O[Local WAV outputs]
-    S --> R[Local voice references]
+    A[Run Windows launcher] --> B[Resolve project root]
+    B --> C[Read selected Python runtime]
+    C --> D[Validate Python and dependencies]
+    D --> E{Runtime valid?}
+    E -- No --> X[Print diagnostic and stop]
+    E -- Yes --> F[Check local configuration]
+    F --> G[Start Python API service]
+    G --> H[Wait for backend health]
+    H --> I{Backend healthy?}
+    I -- No --> Y[Capture logs and report failure]
+    I -- Yes --> J[Start Next.js production server]
+    J --> K[Wait for frontend port]
+    K --> L{Frontend ready?}
+    L -- No --> Z[Report frontend startup failure]
+    L -- Yes --> M[Open local studio in browser]
+    M --> N[Application ready]
 ```
 
-### Request flow
+### 2. Request-to-audio generation
 
-1. The browser sends a same-origin request to `/api/...`.
-2. The Next.js route handler validates the path against an explicit endpoint allowlist and checks the request origin for browser mutations.
-3. The proxy reads `ARKBYTE_BRIDGE_TOKEN` server-side. The secret is never exposed to client JavaScript.
-4. The proxy forwards the request to `ARKBYTE_BRIDGE_URL`, defaulting to `http://127.0.0.1:8765`.
-5. FastAPI checks that the request came from loopback and compares the token using constant-time comparison.
-6. The service validates inputs, stores metadata in SQLite and calls the local media/voice engine.
-7. Generated output is written atomically to the local output directory; the history table stores a reference to that file.
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Next.js UI
+    participant Proxy as API Proxy
+    participant API as Python Service
+    participant Engine as Model Adapter
+    participant Runtime as Local Model Runtime
+    participant Output as Audio Output
 
-### Local data layout
+    User->>UI: Enter text and generation options
+    UI->>Proxy: Submit generation request
+    Proxy->>API: Forward request through local bridge
+    API->>API: Validate payload and options
+    API->>Engine: Dispatch to selected adapter
+    Engine->>Runtime: Prepare model inputs
+    Runtime-->>Engine: Generated audio result
+    Engine->>Output: Normalize / post-process result
+    Output-->>API: Audio result and metadata
+    API-->>Proxy: Structured response
+    Proxy-->>UI: Return result
+    UI-->>User: Playback and available output actions
+```
 
-Default Windows data root: `%LOCALAPPDATA%\ArkByte Voice Studio`.
+### 3. Model selection and adapter dispatch
+
+```mermaid
+flowchart TD
+    A[Generation request] --> B[Validate requested model]
+    B --> C{Adapter registered?}
+    C -- No --> D[Return supported-model error]
+    C -- Yes --> E[Load adapter configuration]
+    E --> F{Model assets available?}
+    F -- No --> G[Return setup guidance]
+    F -- Yes --> H[Check runtime compatibility]
+    H --> I{Compatible?}
+    I -- No --> J[Report hardware / dependency issue]
+    I -- Yes --> K[Prepare inference]
+    K --> L[Execute selected engine]
+    L --> M[Return generated audio]
+```
+
+### 4. Custom voice and reference-audio workflow
+
+```mermaid
+flowchart TD
+    A[Open Custom Voice Lab] --> B[Choose supported voice workflow]
+    B --> C[Provide permitted reference audio / voice material]
+    C --> D[Validate file type, duration, and request constraints]
+    D --> E{Input accepted?}
+    E -- No --> F[Show validation feedback]
+    E -- Yes --> G[Prepare model-specific conditioning]
+    G --> H[Run selected model adapter]
+    H --> I[Generate sample output]
+    I --> J[Listen and evaluate similarity / quality]
+    J --> K{Acceptable result?}
+    K -- No --> L[Adjust supported settings or reference]
+    L --> G
+    K -- Yes --> M[Save or export using configured workflow]
+```
+
+This diagram represents a reference-guided workflow, not a claim that the application trains a foundation model from scratch. Model-specific capabilities vary.
+
+### 5. Validation and release workflow
+
+```mermaid
+flowchart TD
+    A[Developer change] --> B[Review diff and configuration]
+    B --> C[Run backend test suite]
+    C --> D{Backend tests pass?}
+    D -- No --> X[Fix regression]
+    D -- Yes --> E[Generate Next.js types]
+    E --> F[Run TypeScript check]
+    F --> G{Type check passes?}
+    G -- No --> X
+    G -- Yes --> H[Run production build]
+    H --> I{Build succeeds?}
+    I -- No --> X
+    I -- Yes --> J[Run launcher / smoke checks]
+    J --> K[Review logs and release audit]
+    K --> L[Update documentation and evidence]
+    L --> M[Human review before commit / push]
+```
+
+## Voice generation lifecycle
+
+A typical generation request follows this lifecycle:
+
+1. The user selects a supported model and enters text or other supported inputs.
+2. The frontend validates required fields and submits the request through the application API.
+3. The backend validates the request again; frontend validation is not treated as a security boundary.
+4. The orchestration layer dispatches to the selected engine adapter.
+5. The adapter prepares model-specific inputs and invokes the installed inference runtime.
+6. The generated audio is returned through the service response path.
+7. The frontend presents the result for playback and any supported export action.
+
+## Custom voice workflow
+
+The Custom Voice Lab is intended for controlled experimentation with reference audio and model-supported voice conditioning. Use only audio you own or have explicit permission to use. A reference sample does not guarantee a perfect or 100% identity match; output depends on the source recording, model, language, text, settings, and hardware/runtime.
+
+For detailed model-specific instructions, consult the Custom Voice Lab and model adapter documentation linked below.
+
+## Technology stack
+
+| Layer | Technologies |
+|---|---|
+| Frontend | Next.js, React, TypeScript |
+| Styling and UI | CSS / project UI components |
+| Backend | Python, FastAPI-compatible API service |
+| Model integration | Model engines and adapter modules |
+| ML runtime | PyTorch; optional CUDA runtime where supported |
+| Audio | Model-specific audio preprocessing and output handling |
+| Local orchestration | PowerShell, CMD, Node.js, npm |
+| Quality checks | Python tests, TypeScript compiler, Next.js production build |
+
+## Local setup
+
+### Prerequisites
+
+- Windows 10/11 for the supplied PowerShell/CMD launchers.
+- Python 3.12 for the validated local runtime.
+- Node.js and npm compatible with the frontend lockfile.
+- A supported model runtime and its required model assets.
+- NVIDIA driver/CUDA support only if using the CUDA-enabled runtime.
+- FFmpeg is optional and is used by the documentation helper to extract screenshots from the walkthrough video.
+
+### Configure the Python runtime
+
+The repository may use a dedicated local virtual environment. The selected interpreter is recorded in `python-runtime.txt` when that file is present. Keep machine-specific interpreter paths local; do not publish local absolute paths or virtual environments.
+
+Example runtime check:
+
+```powershell
+Set-Location "C:\Projects\ArkByte Voice Studio Web 1.2.0"
+Get-Content .\python-runtime.txt
+& (Get-Content .\python-runtime.txt | Select-Object -First 1) --version
+```
+
+If the project has a dedicated setup or quickstart guide, follow that guide for dependency installation rather than installing model dependencies into an unrelated global Python environment.
+
+### Configure local secrets
+
+- Start from the tracked example environment files, if present.
+- Keep `.env`, `.env.local`, API tokens, bridge tokens, and credentials out of Git.
+- Never paste secret values into logs, issue reports, screenshots, or documentation.
+- Do not replace an existing bridge token merely to troubleshoot startup; first inspect the relevant error without printing the token.
+
+## Run the application
+
+From the project root, use the supplied launcher:
+
+```powershell
+Set-Location "C:\Projects\ArkByte Voice Studio Web 1.2.0"
+.\START ARKBYTE VOICE STUDIO WEB.ps1
+```
+
+The launcher is expected to verify the configured runtime, start the backend and frontend, and wait for readiness before opening the local studio. Use the exact launcher filename present in your checkout.
+
+To verify listeners:
+
+```powershell
+Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+    Where-Object { $_.LocalPort -in 3000,8765 } |
+    Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+Use the supplied stop script for shutdown. It checks the project and listener ownership and requires its exact confirmation phrase. Do not terminate processes by PID unless you have independently verified ownership.
+
+## Validation and test results
+
+### Latest recorded local validation
+
+The most recent supplied run reported:
+
+| Check | Result |
+|---|---|
+| Python runtime | Python 3.12.10 |
+| PyTorch | 2.6.0 + CUDA 12.6 build |
+| CUDA availability | Available on the test machine |
+| GPU | NVIDIA GeForce RTX 3050 Laptop GPU, 6 GB |
+| `pip check` | No broken requirements reported |
+| Backend tests | **61 tests passed** |
+| Frontend TypeScript check | Passed (`next typegen` and `tsc --noEmit`) |
+| Next.js production build | Passed |
+| Production routes | `/`, `/_not-found`, `/api/[...path]`, `/icon.svg` |
+
+**Known test-runner cleanup warning:** after the backend tests had completed successfully, Python reported a Windows `PermissionError [WinError 32]` while cleaning a temporary test log file that was still open. This did not change the reported result of 61 passing tests, but the temporary log-handle cleanup should be fixed and rechecked.
+
+These are recorded results from one local machine and one run, not a guarantee that every environment will produce the same result. Re-run the checks after code changes and update this section only from fresh logs.
+
+### Suggested repeatable checks
+
+Run the project's existing test and frontend scripts as defined in its configuration. Do not assume optional model weights are present on a clean clone. Record the command, environment, result, and any warning in `docs/reports/validation-report.md` when that report exists.
+
+## Repository layout
 
 ```text
-ArkByte Voice Studio/
-├── arkbyte_voice_studio.db
-├── profiles/<profile-id>/
-│   ├── samples/       # Original enrolment recordings
-│   └── references/    # Separate 24 kHz model-ready references
-├── imports/                 # temporary imports; removed after profile creation
-├── outputs/<generated>.wav
-├── logs/application.log
-├── cache/huggingface/       # downloaded model assets (HF_HOME)
-├── cache/torch/             # local PyTorch cache (TORCH_HOME)
-└── temp/
+ArkByte-Voice-Studio/
+â”œâ”€â”€ docs/
+â”‚   â”œâ”€â”€ assets/
+â”‚   â”‚   â”œâ”€â”€ screenshots/
+â”‚   â”‚   â””â”€â”€ video/
+â”‚   â”œâ”€â”€ reports/
+â”‚   â””â”€â”€ ...
+â”œâ”€â”€ service/
+â”‚   â”œâ”€â”€ arkbyte_voice_studio/
+â”‚   â”œâ”€â”€ tests/
+â”‚   â””â”€â”€ main.py
+â”œâ”€â”€ web/
+â”‚   â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ components/
+â”‚   â””â”€â”€ lib/
+â”œâ”€â”€ START ARKBYTE VOICE STUDIO WEB.ps1
+â”œâ”€â”€ STOP ARKBYTE VOICE STUDIO WEB.ps1
+â”œâ”€â”€ VERIFY ARKBYTE RUNNERS.ps1
+â”œâ”€â”€ python-runtime.txt
+â””â”€â”€ README.md
 ```
 
-On Linux/macOS, the data root follows XDG/macOS application-support conventions. Set `ARKBYTE_VOICE_HOME` to use a custom location. Keep this directory private: it contains voice references, scripts/projects metadata and generated audio.
-
-## Quick start — Windows 10/11 x64
-
-### Requirements
-
-- Windows 10/11 x64.
-- Node.js 22 LTS recommended (Next.js 16 requires Node.js 20.9 or newer; `.nvmrc` selects 22).
-- Python 3.12 recommended; 3.13 is also supported by the local service. `.python-version` selects 3.12.
-- FFmpeg and FFprobe. The Windows installer detects them and attempts to install the Gyan FFmpeg package through WinGet when missing.
-- Internet access during dependency installation and the first model-weight download.
-- At least 8 GB free for base setup. The Windows installer requires 15 GB free when `-InstallAI` is requested; allow additional space for the first model-weight download. Actual model storage varies by model/build.
-- Compatible hardware. CPU mode is supported by the engine, but generation may be slow. CUDA requires a compatible NVIDIA driver and PyTorch build.
-
-### Install
-
-1. Download the source ZIP.
-2. Before extraction, right-click the ZIP → **Properties** → General → select **Unblock** if Windows displays it under Security → Apply → OK. Do not disable SmartScreen or Microsoft Defender.
-3. Extract the ZIP to a writable folder, e.g. `C:\Users\<you>\ArkByte Voice Studio Web`.
-4. Open PowerShell in the extracted folder (File Explorer address bar → type `powershell`).
-5. Install the web and local service dependencies:
-
-   ```powershell
-   Set-ExecutionPolicy -Scope Process Bypass -Force
-   .\INSTALL_WEB_WINDOWS.ps1
-   ```
-
-6. Install the local AI packages when ready:
-
-   ```powershell
-   .\INSTALL_WEB_WINDOWS.ps1 -InstallAI
-   ```
-
-   The installer creates a dedicated web-only `.venv` inside this repository. It does not modify the desktop application's Python environment. It detects or attempts to install Node.js, Python and FFmpeg/FFprobe using WinGet; if WinGet is unavailable, the error message gives the manual download location. The web edition shares the default ArkByte creator-data directory (`%LOCALAPPDATA%\ArkByte Voice Studio`) with the desktop app. The local bridge token is generated in `web/.env.local` and must not be committed. `-ForceNewEnvironment` preserves the previous web virtual environment as a timestamped backup before recreating it.
-7. Start the app by double-clicking `START ARKBYTE VOICE STUDIO WEB.cmd`, or run:
-
-   ```powershell
-   .\START ARKBYTE VOICE STUDIO WEB.ps1
-   ```
-
-8. Open `http://127.0.0.1:3000`. Stop the services with `STOP ARKBYTE VOICE STUDIO WEB.cmd`.
-
-### Production build
-
-```powershell
-.\BUILD ARKBYTE VOICE STUDIO WEB.cmd
-.\START ARKBYTE VOICE STUDIO WEB.ps1 -Production
-```
-
-The production process still listens on loopback. Do not use a public reverse proxy or expose ports 3000/8765 without designing remote authentication, per-user data isolation and a different threat model.
-
-## Voice Lab and manual speaker testing
-
-Read [`docs/VOICE_INTELLIGENCE.md`](docs/VOICE_INTELLIGENCE.md) for the feature boundaries and [`docs/MANUAL_VOICE_TESTING.md`](docs/MANUAL_VOICE_TESTING.md) for the ten-recording protocol, held-out test script, A/B evaluation and Qwen dataset export. Recordings and exported datasets contain biometric voice data and must remain private.
-
-## Optional models
-
-- VoxCPM 2 is an optional adapter. Review `service/requirements-voxcpm.txt` and `docs/MODEL_ADAPTERS.md` before installing it in a cloned environment.
-- ECAPA speaker-embedding comparison is optional. Review `service/requirements-speaker-id.txt`; verify matching PyTorch/torchaudio versions before installing SpeechBrain. The model weights download on first explicit use.
-- Local transcript drafting is optional. Install `service/requirements-transcription.txt`; Faster-Whisper model weights download on first use. Review every transcript and click Save transcript before exporting a Qwen training dataset.
-  ```powershell
-  .\.venv\Scripts\python.exe -m pip install -r service\requirements-transcription.txt
-  ```
-- Qwen3-TTS export is included, but Qwen training and inference are external to this app release. See the generated training ZIP and official fine-tuning instructions.
-
-## Local development
-
-### Python bridge
-
-From the repository root (Python 3.12/3.13 recommended):
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r service/requirements.txt
-$env:PYTHONPATH = "$PWD\service"
-$env:ARKBYTE_BRIDGE_TOKEN = "replace-with-a-local-random-secret"
-$env:ARKBYTE_VOICE_HOME = "$env:LOCALAPPDATA\ArkByte Voice Studio"
-.\.venv\Scripts\python.exe -m uvicorn main:app --app-dir service --host 127.0.0.1 --port 8765
-```
-
-To install AI packages in that same environment:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r service/requirements-ai.txt
-```
-
-### Next.js frontend
-
-In a separate terminal, create the frontend environment file from the committed example:
-
-```powershell
-cd web
-Copy-Item .env.example .env.local
-# Generate a strong random token and set the SAME value in both the Next.js
-# .env.local file and the FastAPI process environment. Never commit that token.
-npm install
-npm run dev
-```
-
-The release includes `web/package-lock.json`; use `npm ci` for a repeatable frontend dependency install. Update and commit the lockfile only when intentionally changing frontend dependencies.
-
-The Next.js API proxy reads the bridge token only on the server. Never prefix it with `NEXT_PUBLIC_`.
-
-
-### Linux / macOS manual setup
-
-The automated bootstrap scripts in this repository target Windows. On Linux/macOS, install Python 3.12 or 3.13, Node.js 22 LTS, FFmpeg and FFprobe using your operating-system package manager, then run the services manually:
-
-```bash
-# From the repository root
-python3.12 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip wheel
-python -m pip install -r service/requirements.txt
-# Optional local AI stack (can require several GB):
-python -m pip install -r service/requirements-ai.txt
-
-export PYTHONPATH="$PWD/service"
-export ARKBYTE_VOICE_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/ArkByte Voice Studio"
-export HF_HOME="$ARKBYTE_VOICE_HOME/cache/huggingface"
-export TORCH_HOME="$ARKBYTE_VOICE_HOME/cache/torch"
-export HF_HUB_DISABLE_TELEMETRY=1
-export ARKBYTE_BRIDGE_TOKEN="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-export ARKBYTE_BRIDGE_URL="http://127.0.0.1:8765"
-python -m uvicorn main:app --app-dir service --host 127.0.0.1 --port 8765
-```
-
-In a second terminal, create `web/.env.local` with the exact same `ARKBYTE_BRIDGE_TOKEN` and `ARKBYTE_BRIDGE_URL`, then start Next.js:
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Open `http://127.0.0.1:3000`. Keep both processes bound to loopback. These manual commands are for local development; no cross-platform one-click installer is included in this release.
-
-## Configuration
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `ARKBYTE_BRIDGE_TOKEN` | Generated by installer | Shared secret between Next.js server and local FastAPI bridge |
-| `ARKBYTE_BRIDGE_URL` | `http://127.0.0.1:8765` | Local backend URL. Keep loopback-only. |
-| `ARKBYTE_VOICE_HOME` | OS-specific ArkByte app-data directory | Creator data root for profiles, projects, database and audio |
-| `PYTHONPATH` | Set by launcher | Must include the `service` directory |
-| `HF_HOME` | `%LOCALAPPDATA%\ArkByte Voice Studio\cache\huggingface` | Keeps Hugging Face model downloads inside ArkByte's local data root |
-| `TORCH_HOME` | `%LOCALAPPDATA%\ArkByte Voice Studio\cache\torch` | Keeps PyTorch cache inside ArkByte's local data root |
-| `HF_HUB_DISABLE_TELEMETRY` | `1` in launcher | Disables Hugging Face Hub telemetry |
-| `NEXT_TELEMETRY_DISABLED` | Set by launcher | Disables Next.js telemetry in the bundled local workflow |
-
-`.env.example` is safe to commit; `.env.local`, tokens, local databases and creator media are not.
-
-## API surface
-
-All backend endpoints require the private bridge token and accept loopback clients only. In the browser, use the same-origin Next.js `/api` proxy.
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/api/v1/health` | Engine, GPU, media and database readiness |
-| GET | `/api/v1/profiles` | List voice profiles without exposing disk paths |
-| POST | `/api/v1/enrollments` | Enrol 1–10 recordings into a reusable voice profile |
-| GET | `/api/v1/profiles/{id}/detail` | Read sample diagnostics, transcripts, pipeline status and pronunciation entries |
-| POST | `/api/v1/profiles/{id}/samples` | Add recordings to an existing profile (up to ten total) |
-| POST | `/api/v1/profiles/{id}/samples/{sample-id}/transcribe` | Optional Faster-Whisper local draft transcript |
-| PUT | `/api/v1/profiles/{id}/samples/{sample-id}/transcript` | Review and save/correct an exact sample transcript |
-| POST | `/api/v1/profiles/{id}/anchor/{sample-id}` | Select the active reference audio anchor |
-| GET | `/api/v1/profiles/{id}/training-export/qwen3` | Export a Qwen3-TTS dataset ZIP after all transcripts are reviewed |
-| GET/POST/DELETE | `/api/v1/profiles/{id}/pronunciations` | Manage personal pronunciation substitutions |
-| GET | `/api/v1/models` | Read generation, transcription and optional identity-evaluation model status |
-| POST | `/api/v1/benchmarks/{history-id}` | Compare generated audio to profile acoustic medians |
-| POST | `/api/v1/benchmarks/{history-id}/speaker-identity` | Optional ECAPA-TDNN embedding comparison |
-| POST | `/api/v1/profiles` | Stream an authorized audio/video file and create a reference profile |
-| DELETE | `/api/v1/profiles/{id}` | Delete a voice profile and its reference file; related project reference is cleared |
-| GET | `/api/v1/projects` | List compact saved-project summaries for the library view |
-| GET | `/api/v1/projects/{id}` | Fetch a full saved project when opened |
-| POST | `/api/v1/projects` | Create or update a saved project |
-| DELETE | `/api/v1/projects/{id}` | Delete project metadata without deleting voice profiles or generated audio |
-| POST | `/api/v1/generations` | Queue one local narration job |
-| GET | `/api/v1/generations/{id}` | Poll job status and progress |
-| GET | `/api/v1/history` | List generated outputs |
-| GET | `/api/v1/audio/{history-id}` | Stream or download a WAV file |
-
-The FastAPI OpenAPI docs are intentionally disabled in the local service so no unauthenticated interactive API explorer is exposed by default.
-
-## Security and privacy model
-
-- **Local-only by design:** the supplied launch scripts bind both services to `127.0.0.1`; the FastAPI dependency also rejects non-loopback clients.
-- **Server-only secret:** a 32-byte cryptographically random bridge token is generated on install and stored in `web/.env.local`. The API proxy injects it server-side.
-- **Request boundary:** Next.js API routes use a strict path allowlist, no-store responses and same-origin checks for browser-originated requests.
-- **Validation:** Pydantic limits script size, language identifiers, IDs and generation settings. Uploads use an extension allowlist, random filenames, streamed writes, actual byte counts and a maximum size.
-- **Path containment:** file endpoints resolve output paths under the approved data directory; profile IDs are validated before file operations.
-- **Database safety:** SQLite queries use bound parameters, WAL mode and a busy timeout. Projects do not contain arbitrary filesystem paths.
-- **Model resource protection:** one generation worker avoids concurrent local model loads and VRAM contention. The engine attempts CUDA → CPU fallback on applicable failures.
-- **No security bypasses:** the installer does not disable Defender, SmartScreen or execution policy globally, install root certificates, or open firewall ports.
-- **Voice consent:** a profile requires explicit confirmation of ownership or speaker permission. Users are responsible for complying with applicable rights, platform policies and law.
-
-### Important deployment boundary
-
-This project is **not** a remote multi-user SaaS. It has no tenant model, no remote user authentication layer and no per-user isolation suitable for public hosting. The bridge token is intended only for a local single-user process boundary. A network deployment needs an independent security review, user identity, per-user authorization, encrypted storage, audit logging, rate limits, secure job ownership and safe GPU scheduling.
-
-## Reliability and recovery
-
-- SQLite migrations create the `projects` table automatically in existing ArkByte databases; existing profiles and history are not dropped.
-- Project saves use SQLite upsert and preserve the original `created_at` timestamp while updating `updated_at`.
-- Deleting a profile uses `ON DELETE SET NULL` for saved projects, preserving their scripts and settings.
-- Import writes are streamed to a random temporary file and cleaned up in `finally` paths.
-- Audio is written atomically by the existing engine; partial files are removed on failure.
-- Generation is serialized to reduce GPU memory pressure. A service restart can lose an in-memory active job record, but completed history/audio is persisted.
-- API errors return a stable `{ ok: false, error: { code, message } }` shape. UI fetch failures have dedicated offline/timeout messages.
-- React route-level error and loading boundaries provide recoverable UI states.
-- PowerShell launch scripts write logs under the repository `logs/` folder and attempt to stop partially started processes if startup fails.
-
-If the service is offline, start `START ARKBYTE VOICE STUDIO WEB.cmd` and inspect `logs/backend-error.log` / `logs/nextjs-error.log`. The Python application log is at `%LOCALAPPDATA%\ArkByte Voice Studio\logs\application.log` by default. Treat diagnostic logs as private: they may reveal local paths and operational details.
-
-## Testing and quality checks
-
-Backend tests:
-
-```powershell
-$env:PYTHONPATH = "$PWD\service"
-python -m unittest discover -s service/tests -v
-```
-
-Frontend checks:
-
-```powershell
-cd web
-npm install
-npm run typecheck
-npm run build
-```
-
-The test suite covers configuration and path containment, media validation/extraction, engine output using a mocked local model, database CRUD and foreign-key behavior, multi-recording profiles, transcript review and export guards, local ASR adapter behavior, bridge authentication, project CRUD and detail loading, compact project summaries, API validation and local API behavior. The integration suite may skip external FFmpeg checks when FFmpeg is not installed.
-
-### Current validation status for 1.2.0
-
-- **Python backend:** 46 tests passed in this build environment, including FFmpeg audio analysis, sample/profile storage, anchor selection, transcript review, optional Faster-Whisper draft transcription, Qwen dataset ZIP export, API routes, and mocked optional model adapters.
-- **Python syntax:** service modules compile successfully.
-- **Frontend syntax:** static TS/TSX transpilation is checked separately; it does not replace a semantic typecheck.
-- **Full Next.js semantic typecheck and production build:** not completed here. `npm ci` could not download packages because the npm registry DNS request failed with `EAI_AGAIN`. Run `npm ci`, `npm run typecheck` and `npm run build` on the target Windows PC or another networked machine before treating the frontend as release-verified.
-- **Real Chatterbox / VoxCPM / ECAPA inference:** not executed in this build container. Chatterbox needs your installed model weights and target hardware; VoxCPM and ECAPA are optional and must be installed/loaded separately. Manual voice testing is the next acceptance step.
-- **Windows installer and startup scripts:** not executed in this Linux build container.
-- Two pre-existing FastAPI shutdown-event deprecation warnings remain.
-
-## GitHub: prepare and push
-
-Before publishing, inspect the repo and confirm no `.env.local`, model cache, database, voice recordings, generated audio or private logs are staged.
-
-```powershell
-# From the repository root
-Get-ChildItem -Force
-git status --short
-git check-ignore web/.env.local .venv python-runtime.txt logs
-git init
-git add .
-git status --short
-git commit -m "Build ArkByte Voice Studio Web 1.2.0"
-git branch -M main
-git remote add origin https://github.com/<YOUR-ACCOUNT>/arkbyte-voice-studio-web.git
-git push -u origin main
-```
-
-If the repository already exists, do not run `git init` or replace its remote blindly; inspect `git remote -v` and commit to the intended repository. Never commit credentials, certificates, voice recordings, model files or customer material.
-
-## Interview walkthrough
-
-See [`docs/INTERVIEW GUIDE.md`](docs/INTERVIEW%20GUIDE.md) for a five-minute demo script, architecture trade-offs and sample interview questions. A concise way to explain this project in a technical interview:
-
-1. **Problem:** creators often re-record the same narration voice for each video. Existing recordings can become reusable voice references, provided the speaker authorizes cloning.
-2. **Architecture:** a Next.js frontend calls same-origin API routes. Those routes inject a server-only token and proxy to a loopback FastAPI service. The Python layer owns media processing, SQLite persistence and local model execution.
-3. **Security trade-off:** the bridge token is not sent to browser JavaScript. Loopback binding, constant-time token comparison, route allowlisting, Pydantic validation and filesystem path containment protect the local process boundary.
-4. **Reliability trade-off:** local neural inference is memory-intensive, so jobs are serialized. CUDA is preferred, with CPU fallback where the engine supports recovery. Jobs are process-local; output history is persisted.
-5. **Data design:** voice profiles and generated history reuse the existing ArkByte SQLite database. The 1.1 release adds a project table so script text and delivery settings survive browser restarts.
-6. **Limitations:** local single-user product, not a public SaaS; a full multitrack audio editor and multi-user authentication are intentionally outside this release.
-
-Useful interview topics: API proxy trust boundaries, file upload streaming, safe path resolution, SQLite WAL and transactions, project upsert semantics, long-running job polling, GPU memory pressure, graceful CPU fallback and honest operational health reporting.
-
-## Roadmap
-
-- Sentence-level regeneration and segment stitching with richer pause/prosody control.
-- Phoneme-level alignment and validated pronunciation/accent evaluation.
-- WavLM or other additional speaker-embedding evaluations with calibrated, language-aware test protocols.
-- Automatic accent/dialect analysis and speaker-specific prosody adaptation, only after validated evaluation.
-- Qwen3-TTS checkpoint loading and model lifecycle integration after separate fine-tuning validation.
-- Audio waveform editor and multi-track timeline.
-- Local LLM script assistance with optional model registry.
-- Better progress recovery for jobs after service restart.
-- Optional multi-user architecture only after a separate security and tenancy design.
-
-## Licensing
-
-The ArkByte application source is MIT-licensed. Third-party dependencies and downloaded model weights remain under their own licenses. Review the Chatterbox repository and current model-weight terms before redistribution or commercial use. This application does not bundle AI weights in the source ZIP.
-
-
-### Windows: Python 3.12/3.13 not detected
-
-The installer accepts 64-bit Python 3.12 or 3.13. Find installed interpreters with `py -0p` or `Get-Command python.exe -All`. Then pass the full executable path explicitly:
-
-```powershell
-.\INSTALL_WEB_WINDOWS.ps1 -InstallAI -PythonPath "C:\Users\YOUR_USER\AppData\Local\Programs\Python\Python312\python.exe"
-```
-
-Replace the example with the actual `python.exe` path reported on your PC. The installer validates its version and architecture before creating the isolated web `.venv`.
+This is a high-level guide; optional files and model-specific modules may differ by release. The actual checkout is authoritative.
+
+## Security and responsible use
+
+- Use voice recordings only with the speaker's informed consent or other valid authorization.
+- Do not impersonate a person, mislead listeners, commit fraud, or bypass identity/security checks.
+- Clearly disclose synthetic or altered audio where context requires it.
+- Treat uploaded reference audio, generated audio, model files, logs, and credentials as potentially sensitive.
+- Keep secrets and local user data out of source control.
+- Review `SECURITY.md` and the safe-use policy before distributing or deploying the application.
+- A local-first design does not automatically make every integration private; review the data path of any external service or hosted model.
+
+## Troubleshooting
+
+| Symptom | Checks |
+|---|---|
+| Backend does not start | Confirm the interpreter path, Python dependencies, model assets, port availability, and `logs/backend.log`. |
+| Frontend does not start | Confirm Node/npm versions, installed dependencies, port 3000 availability, and `logs/nextjs.log`. |
+| CUDA unavailable | Check NVIDIA driver compatibility, the selected PyTorch build, and the interpreter referenced by the runtime configuration. |
+| Model unavailable | Confirm the selected adapter, model dependencies, and required model assets are installed. |
+| API bridge error | Check local configuration and bridge setup without printing or sharing secret values. |
+| Stop script cancels | Enter the exact confirmation phrase shown by the script; cancellation intentionally leaves processes running. |
+| Test cleanup warning | Inspect test teardown and ensure file handles are closed before temporary directories are removed. |
+
+## Documentation
+
+- [quickstart](docs/quickstart.md)
+- [ARCHITECTURE](docs/ARCHITECTURE.md)
+- [flowcharts](docs/flowcharts.md)
+- [CUSTOM VOICE LAB](docs/CUSTOM-VOICE-LAB.md)
+- [MODEL ADAPTERS](docs/MODEL_ADAPTERS.md)
+- [VOICE INTELLIGENCE](docs/VOICE_INTELLIGENCE.md)
+- [SAFE USE POLICY](docs/SAFE-USE-POLICY.md)
+- [SECURITY](docs/SECURITY.md)
+- [interview guide](docs/interview-guide.md)
+- [MANUAL VOICE TESTING](docs/MANUAL_VOICE_TESTING.md)
+- [validation report](docs/reports/validation-report.md)
+- [repository release audit](docs/reports/repository-release-audit.md)
+- [release notes](docs/releases/release-notes.md)
+- [repository settings](docs/project/repository-settings.md)
+
+## Development roadmap
+
+- Keep model adapters isolated and document each adapter's supported inputs, dependencies, and limitations.
+- Improve automated regression coverage for audio generation, storage, and API validation.
+- Resolve the temporary test-log handle cleanup warning and record a clean rerun.
+- Maintain reproducible setup instructions for CPU and CUDA environments.
+- Keep screenshots, walkthrough video, architecture diagrams, and validation evidence synchronized with the actual release.
+- Complete a final repository audit before creating a release or pushing changes.
+
+## Contributing
+
+1. Review the current architecture and relevant documentation before changing a component.
+2. Keep secrets, local environments, model weights, generated audio, and private user data out of commits.
+3. Add or update tests for behavior changes.
+4. Run backend tests, frontend type checking, and a production build.
+5. Update documentation and validation evidence to match the verified implementation.
+6. Review `git diff` and `git status` before requesting a commit or push.
+
+## License
+
+Add the project's chosen license before presenting this repository as an open-source release. Until a license file and explicit license terms are present, all rights remain with the respective copyright holder.

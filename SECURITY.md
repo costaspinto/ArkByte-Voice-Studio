@@ -18,4 +18,6 @@ Before sharing diagnostics, review them for usernames, filesystem paths, filenam
 
 ## Voice consent
 
-Only create or use a voice profile when you own the voice or have explicit permission from the speaker. Do not use the application to impersonate a person, mislead an audience or bypass a platform's disclosure requirements.
+Only create or use a voice profile when you own the voice or have explicit permission from the speaker. Do not use the application to impersonate a person, mislead an audience, commit fraud, harass anyone, create non-consensual intimate content or bypass identity/biometric verification. Disclose synthetic speech where a listener could mistake it for a genuine recording.
+
+Profile creation and each generation require separate permission/responsible-use acknowledgements. These are deterrence controls, not identity verification and not a guarantee against misuse. See `docs/SAFE-USE-POLICY.md` for the complete policy.

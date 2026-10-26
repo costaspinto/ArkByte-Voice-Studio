@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALLOWED_PATH = /^v1\/(health|models|enrollments|profiles(?:\/[a-f0-9]{32}(?:\/(?:detail|samples|samples\/[a-f0-9]{32}\/(?:transcript|transcribe)|anchor\/[a-f0-9]{32}|pronunciations(?:\/[a-f0-9]{32})?|training-export\/qwen3))?)?|profile-samples\/[a-f0-9]{32}\/audio|projects(?:\/[a-f0-9]{32})?|generations(?:\/[a-f0-9]{32})?|benchmarks\/[a-f0-9]{32}(?:\/speaker-identity)?|history|audio\/[a-f0-9]{32})$/;
+const ALLOWED_PATH = /^v1\/(health|models|enrollments|profiles(?:\/[a-f0-9]{32}(?:\/(?:detail|samples|samples\/[a-f0-9]{32}\/(?:transcript|transcribe)|anchor\/[a-f0-9]{32}|pronunciations(?:\/[a-f0-9]{32})?|training-export\/qwen3))?)?|profile-samples\/[a-f0-9]{32}\/audio|projects(?:\/[a-f0-9]{32})?|generations(?:\/[a-f0-9]{32})?|benchmarks\/[a-f0-9]{32}(?:\/speaker-identity)?|history(?:\/[a-f0-9]{32})?|audio\/[a-f0-9]{32})$/;
 
 function localError(message: string, status: number, code: string) {
   return NextResponse.json({ ok: false, error: { code, message } }, { status });

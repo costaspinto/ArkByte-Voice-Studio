@@ -33,6 +33,20 @@ class StorageTests(unittest.TestCase):
         self.assertIsNone(self.storage.list_history()[0]["profile_id"])
 
 
+    def test_history_lookup_delete_and_all_history(self):
+        rows = [
+            {"id": "history-a", "profile_id": None, "profile_name": "Voice A", "script_preview": "A", "language": "en", "output_path": "/tmp/a.wav"},
+            {"id": "history-b", "profile_id": None, "profile_name": "Voice B", "script_preview": "B", "language": "en", "output_path": "/tmp/b.wav"},
+        ]
+        for row in rows:
+            self.storage.add_history(row)
+        self.assertEqual(self.storage.get_history("history-a")["script_preview"], "A")
+        self.assertEqual(len(self.storage.list_all_history()), 2)
+        self.assertTrue(self.storage.delete_history("history-a"))
+        self.assertFalse(self.storage.delete_history("history-a"))
+        self.assertIsNone(self.storage.get_history("history-a"))
+        self.assertEqual([item["id"] for item in self.storage.list_all_history()], ["history-b"])
+
     def test_project_create_update_delete(self):
         created = self.storage.save_project({
             "id": "a" * 32,

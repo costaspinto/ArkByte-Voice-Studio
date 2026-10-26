@@ -47,7 +47,15 @@ class LocalApiTests(unittest.TestCase):
         payload = response.json()
         self.assertIn("speaker_identity", payload)
         self.assertIn("transcription", payload)
-        self.assertIn("chatterbox", {item["id"] for item in payload["models"]})
+        model_ids = {item["id"] for item in payload["models"]}
+        self.assertIn("chatterbox", model_ids)
+        self.assertIn("voxcpm05", model_ids)
+        self.assertIn("voxcpm2", model_ids)
+        compact = next(item for item in payload["models"] if item["id"] == "voxcpm05")
+        self.assertTrue(compact["integrated"])
+        self.assertTrue(compact["requires_transcript"])
+        larger = next(item for item in payload["models"] if item["id"] == "voxcpm2")
+        self.assertEqual(larger["recommended_vram_gb"], 8)
         qwen = next(item for item in payload["models"] if item["id"] == "qwen3_tts")
         self.assertFalse(qwen["integrated"])
 
@@ -118,6 +126,131 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(response.json()["profiles"], [])
 
 
+    def test_profile_delete_requires_exact_phrase_and_removes_managed_voice_root(self):
+        from uuid import uuid4
+        profile_id = uuid4().hex
+        sample_id = uuid4().hex
+        project_id = uuid4().hex
+        history_id = uuid4().hex
+        profile_dir = main_module.DATA_PATHS["profiles"] / profile_id
+        sample_dir = profile_dir / "samples"
+        reference_dir = profile_dir / "references"
+        sample_dir.mkdir(parents=True, exist_ok=False)
+        reference_dir.mkdir(parents=True, exist_ok=False)
+        original = sample_dir / "speaker_original.wav"
+        reference = reference_dir / "speaker_reference.wav"
+        original.write_bytes(b"original-speaker-recording")
+        reference.write_bytes(b"processed-speaker-reference")
+        main_module.STORAGE.add_profile({
+            "id": profile_id, "name": "Deletion test voice", "language": "en",
+            "reference_path": str(reference), "source_name": "speaker.wav", "consent_ack": True,
+        })
+        main_module.STORAGE.add_voice_samples([{
+            "id": sample_id, "profile_id": profile_id, "original_path": str(original),
+            "model_reference_path": str(reference), "source_name": "speaker.wav",
+            "transcript": "Private transcript", "transcript_reviewed": True,
+            "analysis": {"duration_seconds": 8, "quality_score": 90}, "is_anchor": True,
+        }])
+        main_module.STORAGE.save_profile_analysis(profile_id, "accent", "pronunciation", {"private": True})
+        main_module.STORAGE.upsert_pronunciation({
+            "id": uuid4().hex, "profile_id": profile_id, "term": "ArkByte", "say_as": "Ark Byte", "notes": "private",
+        })
+        main_module.STORAGE.save_project({
+            "id": project_id, "title": "Keep this project", "script": "Keep this script",
+            "profile_id": profile_id, "language_id": "en", "output_name": "kept",
+            "exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.8,
+        })
+        main_module.STORAGE.add_history({
+            "id": history_id, "profile_id": profile_id, "profile_name": "Deletion test voice",
+            "script_preview": "Keep generated audio", "language": "en",
+            "output_path": str(main_module.DATA_PATHS["outputs"] / "kept.wav"), "status": "complete",
+        })
+        try:
+            rejected = self.client.request(
+                "DELETE", f"/api/v1/profiles/{profile_id}", headers=self.headers,
+                json={"confirmation_phrase": "delete voice"},
+            )
+            self.assertEqual(rejected.status_code, 400)
+            self.assertEqual(rejected.json()["error"]["code"], "DELETE_CONFIRMATION_REQUIRED")
+            self.assertTrue(profile_dir.exists())
+            self.assertIsNotNone(main_module.STORAGE.get_profile(profile_id))
+
+            deleted = self.client.request(
+                "DELETE", f"/api/v1/profiles/{profile_id}", headers=self.headers,
+                json={"confirmation_phrase": "DELETE VOICE"},
+            )
+            self.assertEqual(deleted.status_code, 200, deleted.text)
+            self.assertTrue(deleted.json()["deleted"])
+            self.assertTrue(deleted.json()["file_cleanup_complete"])
+            self.assertFalse(profile_dir.exists())
+            self.assertIsNone(main_module.STORAGE.get_profile(profile_id))
+            self.assertEqual(main_module.STORAGE.list_voice_samples(profile_id), [])
+            self.assertIsNone(main_module.STORAGE.get_profile_analysis(profile_id))
+            self.assertEqual(main_module.STORAGE.list_pronunciations(profile_id), [])
+            self.assertIsNone(main_module.STORAGE.get_project(project_id)["profile_id"])
+            self.assertIsNone(main_module.STORAGE.get_history(history_id)["profile_id"])
+            self.assertEqual(main_module.STORAGE.get_project(project_id)["script"], "Keep this script")
+        finally:
+            main_module.STORAGE.delete_profile(profile_id)
+            main_module.STORAGE.delete_project(project_id)
+            main_module.STORAGE.delete_history(history_id)
+            shutil.rmtree(profile_dir, ignore_errors=True)
+
+    def test_profile_delete_is_blocked_while_generation_is_active(self):
+        from uuid import uuid4
+        profile_id = uuid4().hex
+        profile_dir = main_module.DATA_PATHS["profiles"] / profile_id
+        profile_dir.mkdir(parents=True)
+        reference = profile_dir / "reference.wav"
+        reference.write_bytes(b"reference")
+        main_module.STORAGE.add_profile({
+            "id": profile_id, "name": "Busy voice", "language": "en",
+            "reference_path": str(reference), "source_name": "busy.wav", "consent_ack": True,
+        })
+        job_id = uuid4().hex
+        try:
+            with main_module.JOBS_LOCK:
+                main_module.JOBS[job_id] = {"id": job_id, "status": "running"}
+            response = self.client.request(
+                "DELETE", f"/api/v1/profiles/{profile_id}", headers=self.headers,
+                json={"confirmation_phrase": "DELETE VOICE"},
+            )
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()["error"]["code"], "GENERATION_BUSY")
+            self.assertTrue(profile_dir.exists())
+            self.assertIsNotNone(main_module.STORAGE.get_profile(profile_id))
+        finally:
+            with main_module.JOBS_LOCK:
+                main_module.JOBS.pop(job_id, None)
+            main_module.STORAGE.delete_profile(profile_id)
+            shutil.rmtree(profile_dir, ignore_errors=True)
+
+    def test_profile_delete_rejects_reference_path_outside_managed_profile_folder(self):
+        from uuid import uuid4
+        profile_id = uuid4().hex
+        profile_dir = main_module.DATA_PATHS["profiles"] / profile_id
+        profile_dir.mkdir(parents=True)
+        external = main_module.DATA_PATHS["temp"] / f"outside-{uuid4().hex}.wav"
+        external.write_bytes(b"must-not-be-touched")
+        main_module.STORAGE.add_profile({
+            "id": profile_id, "name": "Unsafe path voice", "language": "en",
+            "reference_path": str(external), "source_name": "outside.wav", "consent_ack": True,
+        })
+        try:
+            response = self.client.request(
+                "DELETE", f"/api/v1/profiles/{profile_id}", headers=self.headers,
+                json={"confirmation_phrase": "DELETE VOICE"},
+            )
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()["error"]["code"], "PROFILE_PATH_UNSAFE")
+            self.assertTrue(external.exists())
+            self.assertTrue(profile_dir.exists())
+            self.assertIsNotNone(main_module.STORAGE.get_profile(profile_id))
+        finally:
+            main_module.STORAGE.delete_profile(profile_id)
+            shutil.rmtree(profile_dir, ignore_errors=True)
+            external.unlink(missing_ok=True)
+
 
     def test_projects_require_token(self):
         response = self.client.get("/api/v1/projects")
@@ -172,9 +305,162 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["error"]["code"], "VALIDATION_ERROR")
 
+    def test_generation_requires_responsible_use_acknowledgement(self):
+        payload = {
+            "profile_id": "b" * 32,
+            "script": "A short test sentence.",
+            "language_id": "en",
+            "rights_ack": False,
+        }
+        response = self.client.post("/api/v1/generations", headers=self.headers, json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "USE_POLICY_ACK_REQUIRED")
+
+    def test_generation_requires_existing_permission_confirmed_profile(self):
+        payload = {
+            "profile_id": "b" * 32,
+            "script": "A short test sentence.",
+            "language_id": "en",
+            "rights_ack": True,
+        }
+        response = self.client.post("/api/v1/generations", headers=self.headers, json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "VOICE_PERMISSION_REQUIRED")
+
+    def test_delete_history_item_removes_only_its_generated_audio(self):
+        from uuid import uuid4
+        history_id = uuid4().hex
+        output = main_module.DATA_PATHS["outputs"] / f"{history_id}.wav"
+        output.write_bytes(b"test-generated-audio")
+        main_module.STORAGE.add_history({
+            "id": history_id, "profile_id": None, "profile_name": "Test voice",
+            "script_preview": "Delete this narration", "language": "en",
+            "output_path": str(output), "status": "complete",
+        })
+        try:
+            response = self.client.delete(f"/api/v1/history/{history_id}", headers=self.headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["deleted"], 1)
+            self.assertFalse(output.exists())
+            self.assertIsNone(main_module.STORAGE.get_history(history_id))
+        finally:
+            output.unlink(missing_ok=True)
+            main_module.STORAGE.delete_history(history_id)
+
+    def test_delete_history_rejects_output_path_outside_outputs_folder(self):
+        from uuid import uuid4
+        history_id = uuid4().hex
+        outside = Path(_TMP.name) / f"protected-{history_id}.wav"
+        outside.write_bytes(b"must-not-delete")
+        main_module.STORAGE.add_history({
+            "id": history_id, "profile_id": None, "profile_name": "Test voice",
+            "script_preview": "Unsafe path", "language": "en",
+            "output_path": str(outside), "status": "complete",
+        })
+        try:
+            response = self.client.delete(f"/api/v1/history/{history_id}", headers=self.headers)
+            self.assertEqual(response.status_code, 409)
+            self.assertTrue(outside.exists())
+            self.assertIsNotNone(main_module.STORAGE.get_history(history_id))
+        finally:
+            outside.unlink(missing_ok=True)
+            main_module.STORAGE.delete_history(history_id)
+
+    def test_clear_history_deletes_audio_but_preserves_profiles_and_projects(self):
+        from uuid import uuid4
+        history_id = uuid4().hex
+        profile_id = uuid4().hex
+        project_id = uuid4().hex
+        output = main_module.DATA_PATHS["outputs"] / f"{history_id}.wav"
+        output.write_bytes(b"test-generated-audio")
+        main_module.STORAGE.add_profile({
+            "id": profile_id, "name": "Keep this voice", "language": "en",
+            "reference_path": str(main_module.DATA_PATHS["profiles"] / "missing.wav"),
+            "source_name": "reference.wav", "consent_ack": True,
+        })
+        main_module.STORAGE.save_project({
+            "id": project_id, "title": "Keep this project", "script": "Keep this text.",
+            "profile_id": profile_id, "language_id": "en", "output_name": "keep",
+            "exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.8,
+        })
+        main_module.STORAGE.add_history({
+            "id": history_id, "profile_id": profile_id, "profile_name": "Keep this voice",
+            "script_preview": "Delete only this generated narration", "language": "en",
+            "output_path": str(output), "status": "complete",
+        })
+        try:
+            response = self.client.delete("/api/v1/history", headers=self.headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["deleted"], 1)
+            self.assertFalse(output.exists())
+            self.assertEqual(main_module.STORAGE.list_all_history(), [])
+            self.assertIsNotNone(main_module.STORAGE.get_profile(profile_id))
+            self.assertIsNotNone(main_module.STORAGE.get_project(project_id))
+        finally:
+            output.unlink(missing_ok=True)
+            main_module.STORAGE.delete_history(history_id)
+            main_module.STORAGE.delete_project(project_id)
+            main_module.STORAGE.delete_profile(profile_id)
+
+    def test_clear_history_rejects_unsafe_path_before_deleting_any_entry(self):
+        from uuid import uuid4
+        safe_id, unsafe_id = uuid4().hex, uuid4().hex
+        safe_output = main_module.DATA_PATHS["outputs"] / f"{safe_id}.wav"
+        unsafe_output = Path(_TMP.name) / f"outside-{unsafe_id}.wav"
+        safe_output.write_bytes(b"safe-audio")
+        unsafe_output.write_bytes(b"protected-audio")
+        for history_id, output in ((safe_id, safe_output), (unsafe_id, unsafe_output)):
+            main_module.STORAGE.add_history({
+                "id": history_id, "profile_id": None, "profile_name": "Test voice",
+                "script_preview": "Bulk deletion safety", "language": "en",
+                "output_path": str(output), "status": "complete",
+            })
+        try:
+            response = self.client.delete("/api/v1/history", headers=self.headers)
+            self.assertEqual(response.status_code, 409)
+            self.assertTrue(safe_output.exists())
+            self.assertTrue(unsafe_output.exists())
+            self.assertIsNotNone(main_module.STORAGE.get_history(safe_id))
+            self.assertIsNotNone(main_module.STORAGE.get_history(unsafe_id))
+        finally:
+            safe_output.unlink(missing_ok=True)
+            unsafe_output.unlink(missing_ok=True)
+            main_module.STORAGE.delete_history(safe_id)
+            main_module.STORAGE.delete_history(unsafe_id)
+
+    def test_clear_history_refuses_to_race_active_generation(self):
+        job_id = "c" * 32
+        main_module.JOBS[job_id] = {"id": job_id, "status": "running", "progress": 0.5}
+        try:
+            response = self.client.delete("/api/v1/history", headers=self.headers)
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("active generation", response.json()["error"]["message"].lower())
+        finally:
+            main_module.JOBS.pop(job_id, None)
+
+    def test_history_delete_requires_local_auth(self):
+        response = self.client.delete("/api/v1/history")
+        self.assertEqual(response.status_code, 401)
+
     def test_invalid_history_id_is_not_exposed(self):
         response = self.client.get("/api/v1/audio/../../secret", headers=self.headers)
         self.assertIn(response.status_code, (404, 400))
+
+
+    def test_voxcpm05_rejects_unsupported_language_before_queueing(self):
+        from unittest.mock import patch
+        payload = {
+            "profile_id": "b" * 32,
+            "script": "A short test sentence.",
+            "language_id": "hi",
+            "output_name": "language-test",
+            "model_id": "voxcpm05",
+            "rights_ack": True,
+        }
+        with patch.object(main_module.STUDIO.voxcpm, "is_installed", return_value=True):
+            response = self.client.post("/api/v1/generations", headers=self.headers, json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "VOXCPM05_LANGUAGE_UNSUPPORTED")
 
 
 if __name__ == "__main__":

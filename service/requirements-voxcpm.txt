@@ -1,3 +1,4 @@
-# Optional experimental model adapter. Install in a cloned/isolated Python environment.
-# Do not install into the working Chatterbox environment without a dependency audit.
-voxcpm
+# Optional inference adapter for VoxCPM 0.5B and VoxCPM 2.
+# Prefer INSTALL VOXCPM MODELS.ps1: it dry-runs pip resolution and constrains
+# every package already installed in the selected runtime before installation.
+voxcpm==2.0.3

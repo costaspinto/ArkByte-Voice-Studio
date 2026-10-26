@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+  <title id="title">ArkByte Voice Studio</title>
+  <desc id="desc">A local-first AI voice production workspace with an animated audio waveform and model signal paths.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#08111f"/><stop offset=".55" stop-color="#102b32"/><stop offset="1" stop-color="#071522"/></linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#55f2c0"/><stop offset="1" stop-color="#72d9ff"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#37e8b3" stop-opacity=".28"/><stop offset="1" stop-color="#37e8b3" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="30"/></filter>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M42 0H0V42" fill="none" stroke="#9cebd5" stroke-opacity=".055" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1600" height="520" rx="30" fill="url(#bg)"/>
+  <rect width="1600" height="520" rx="30" fill="url(#grid)"/>
+  <ellipse cx="1260" cy="250" rx="430" ry="300" fill="url(#glow)" filter="url(#blur)"/>
+  <path d="M0 420C280 360 380 520 670 430S1110 340 1600 430" stroke="#55f2c0" stroke-opacity=".12" stroke-width="2" fill="none"/>
+  <g transform="translate(108 108)">
+    <rect width="58" height="58" rx="17" fill="#183d3d" stroke="#55f2c0" stroke-opacity=".6"/>
+    <path d="M15 31h6l5-12 7 25 7-31 7 22h6" fill="none" stroke="url(#mint)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="78" y="25" fill="#eaf8f5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="4">ARKBYTE</text>
+    <text x="78" y="52" fill="#82a9ab" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" letter-spacing="3">CREATOR TOOLS / LOCAL AI</text>
+  </g>
+  <text x="110" y="265" fill="#f1fbf8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="61" font-weight="750" letter-spacing="-2">Voice Studio</text>
+  <text x="114" y="314" fill="#a6c6c6" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="23">A local-first workspace for voice, narration and audio workflows.</text>
+  <g transform="translate(114 365)">
+    <rect width="210" height="42" rx="21" fill="#16473f" stroke="#55f2c0" stroke-opacity=".55"/>
+    <circle cx="22" cy="21" r="5" fill="#55f2c0"/>
+    <text x="39" y="26" fill="#d7fff1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="1.1">LOCAL-FIRST</text>
+    <rect x="224" width="184" height="42" rx="21" fill="#122e3e" stroke="#72d9ff" stroke-opacity=".45"/>
+    <text x="246" y="26" fill="#d7f4ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="1.1">MODEL ADAPTERS</text>
+    <rect x="422" width="190" height="42" rx="21" fill="#192b40" stroke="#a8b8ff" stroke-opacity=".35"/>
+    <text x="444" y="26" fill="#e5eaff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="1.1">VOICE WORKFLOWS</text>
+  </g>
+  <g transform="translate(880 75)">
+    <rect x="0" y="0" width="590" height="360" rx="26" fill="#0c1c29" stroke="#5de8c1" stroke-opacity=".28"/>
+    <rect x="22" y="22" width="546" height="316" rx="16" fill="#102636" stroke="#a8e8dd" stroke-opacity=".08"/>
+    <g fill="#55f2c0" opacity=".9">
+      <rect x="70" y="154" width="9" height="53" rx="4"><animate attributeName="height" values="22;70;34;53;22" dur="1.7s" repeatCount="indefinite"/><animate attributeName="y" values="170;146;164;154;170" dur="1.7s" repeatCount="indefinite"/></rect>
+      <rect x="91" y="131" width="9" height="100" rx="4"><animate attributeName="height" values="50;95;42;100;50" dur="1.3s" repeatCount="indefinite"/><animate attributeName="y" values="157;134;160;131;157" dur="1.3s" repeatCount="indefinite"/></rect>
+      <rect x="112" y="108" width="9" height="145" rx="4"><animate attributeName="height" values="100;145;74;125;100" dur="1.9s" repeatCount="indefinite"/><animate attributeName="y" values="130;108;164;118;130" dur="1.9s" repeatCount="indefinite"/></rect>
+      <rect x="133" y="146" width="9" height="70" rx="4"><animate attributeName="height" values="70;28;86;45;70" dur="1.5s" repeatCount="indefinite"/><animate attributeName="y" values="146;167;138;158;146" dur="1.5s" repeatCount="indefinite"/></rect>
+      <rect x="154" y="122" width="9" height="118" rx="4"><animate attributeName="height" values="118;63;145;82;118" dur="1.6s" repeatCount="indefinite"/><animate attributeName="y" values="122;150;108;140;122" dur="1.6s" repeatCount="indefinite"/></rect>
+      <rect x="175" y="157" width="9" height="48" rx="4"><animate attributeName="height" values="48;82;28;64;48" dur="1.8s" repeatCount="indefinite"/><animate attributeName="y" values="157;140;167;150;157" dur="1.8s" repeatCount="indefinite"/></rect>
+      <rect x="196" y="136" width="9" height="90" rx="4"><animate attributeName="height" values="90;45;120;66;90" dur="1.4s" repeatCount="indefinite"/><animate attributeName="y" values="136;158;120;147;136" dur="1.4s" repeatCount="indefinite"/></rect>
+      <rect x="217" y="111" width="9" height="140" rx="4"><animate attributeName="height" values="140;88;54;130;140" dur="1.2s" repeatCount="indefinite"/><animate attributeName="y" values="111;137;154;116;111" dur="1.2s" repeatCount="indefinite"/></rect>
+      <rect x="238" y="149" width="9" height="65" rx="4"><animate attributeName="height" values="65;35;94;51;65" dur="1.6s" repeatCount="indefinite"/><animate attributeName="y" values="149;164;134;155;149" dur="1.6s" repeatCount="indefinite"/></rect>
+      <rect x="259" y="126" width="9" height="112" rx="4"><animate attributeName="height" values="112;55;135;76;112" dur="1.4s" repeatCount="indefinite"/><animate attributeName="y" values="126;154;114;145;126" dur="1.4s" repeatCount="indefinite"/></rect>
+      <rect x="280" y="153" width="9" height="55" rx="4"><animate attributeName="height" values="55;98;31;80;55" dur="1.7s" repeatCount="indefinite"/><animate attributeName="y" values="153;132;166;141;153" dur="1.7s" repeatCount="indefinite"/></rect>
+      <rect x="301" y="117" width="9" height="132" rx="4"><animate attributeName="height" values="132;72;144;90;132" dur="1.5s" repeatCount="indefinite"/><animate attributeName="y" values="117;147;108;135;117" dur="1.5s" repeatCount="indefinite"/></rect>
+      <rect x="322" y="140" width="9" height="82" rx="4"><animate attributeName="height" values="82;36;104;61;82" dur="1.8s" repeatCount="indefinite"/><animate attributeName="y" values="140;163;129;150;140" dur="1.8s" repeatCount="indefinite"/></rect>
+      <rect x="343" y="127" width="9" height="110" rx="4"><animate attributeName="height" values="110;52;132;77;110" dur="1.3s" repeatCount="indefinite"/><animate attributeName="y" values="127;155;116;142;127" dur="1.3s" repeatCount="indefinite"/></rect>
+      <rect x="364" y="157" width="9" height="49" rx="4"><animate attributeName="height" values="49;80;29;66;49" dur="1.7s" repeatCount="indefinite"/><animate attributeName="y" values="157;141;167;149;157" dur="1.7s" repeatCount="indefinite"/></rect>
+      <rect x="385" y="135" width="9" height="92" rx="4"><animate attributeName="height" values="92;48;118;66;92" dur="1.6s" repeatCount="indefinite"/><animate attributeName="y" values="135;157;122;148;135" dur="1.6s" repeatCount="indefinite"/></rect>
+      <rect x="406" y="112" width="9" height="138" rx="4"><animate attributeName="height" values="138;78;144;95;138" dur="1.4s" repeatCount="indefinite"/><animate attributeName="y" values="112;142;108;133;112" dur="1.4s" repeatCount="indefinite"/></rect>
+      <rect x="427" y="150" width="9" height="62" rx="4"><animate attributeName="height" values="62;96;33;74;62" dur="1.5s" repeatCount="indefinite"/><animate attributeName="y" values="150;133;164;144;150" dur="1.5s" repeatCount="indefinite"/></rect>
+      <rect x="448" y="129" width="9" height="106" rx="4"><animate attributeName="height" values="106;57;130;79;106" dur="1.8s" repeatCount="indefinite"/><animate attributeName="y" values="129;153;117;142;129" dur="1.8s" repeatCount="indefinite"/></rect>
+      <rect x="469" y="155" width="9" height="51" rx="4"><animate attributeName="height" values="51;83;31;64;51" dur="1.3s" repeatCount="indefinite"/><animate attributeName="y" values="155;139;165;149;155" dur="1.3s" repeatCount="indefinite"/></rect>
+    </g>
+    <path d="M58 265H530" stroke="#77b4bd" stroke-opacity=".25"/>
+    <text x="58" y="296" fill="#d5f5ee" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650">REFERENCE  →  MODEL  →  NARRATION</text>
+    <text x="58" y="321" fill="#77a4a9" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" letter-spacing="1.6">PRIVATE BY DESIGN · RUNS ON YOUR MACHINE</text>
+  </g>
+</svg>

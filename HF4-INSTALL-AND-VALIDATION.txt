@@ -1,0 +1,30 @@
+ARKBYTE VOICE STUDIO 1.2.0 — HF4 VOICE PROFILE DELETE + SIDEBAR FIX
+
+Apply this patch on top of the installed three-patch 1.2.0 setup (Base + HF2 + HF3).
+
+Included:
+- Require exact uppercase DELETE VOICE confirmation in the UI and backend API.
+- Refuse profile deletion while any generation is queued or running, and recheck profile/consent under the generation lock.
+- Delete only the selected profile's ArkByte-managed profile folder and profile-owned audio/transcript/analysis/pronunciation records.
+- Validate all managed file paths are contained within that profile folder; reject unsafe/out-of-root paths.
+- Quarantine then purge the selected profile folder; retry quarantine cleanup on service restart if Windows temporarily locks a file.
+- Preserve generated narration/history rows, saved projects/scripts, other profiles, model weights and caches.
+- Sidebar navigation scrolls within the sidebar; About/Private by Design footer stays within the sidebar on shorter screens.
+
+Important scope:
+- This removes the selected profile from ArkByte's managed profile root only.
+- Copies/dataset exports previously saved outside ArkByte are not discoverable or deleted by this patch. Delete those separately where they were exported.
+- Generated audio and generation history are intentionally preserved.
+
+Install:
+1. Stop ArkByte.
+2. Back up your project, or use the included installer (it creates a timestamped source backup).
+3. Apply the ZIP at the project root, preserving its folder structure.
+4. Run: .\RUN ARKBYTE VOICE STUDIO.cmd
+5. Confirm the runner's tests/typecheck/build before using the app.
+
+Validation performed on the patch source:
+- Python compileall passed.
+- Backend unittest suite: 61/61 passed.
+- TSX syntax parsing passed for affected frontend source.
+- A full Next.js typecheck/production build was not run in this build container because the uploaded source snapshot did not contain web/node_modules. Run the local project runner after installation.

@@ -43,3 +43,17 @@ Official model usage: https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb
 - Phoneme alignment, automatic accent classification and learned speaker-specific prosody adaptation.
 
 These are not represented as installed or completed capabilities in the model registry.
+
+
+## VoxCPM model options (1.2.0 maintenance update)
+
+ArkByte exposes two VoxCPM checkpoints through the optional `voxcpm` package:
+
+- `voxcpm05` uses `openbmb/VoxCPM-0.5B`. This is a smaller continuation-cloning path for English and Chinese. It requires the exact reviewed transcript of the selected anchor reference and limits that anchor to 30 seconds or less. The upstream FAQ lists approximately 5 GB VRAM for the 0.5B generation family; this is tight on a 6 GB laptop GPU and is not a guarantee that generation will fit.
+- `voxcpm2` uses `openbmb/VoxCPM2` for multilingual reference conditioning. The upstream FAQ lists approximately 8 GB VRAM. It is not recommended on a 6 GB GPU.
+
+The service releases the previously loaded adapter before loading another model to avoid keeping Chatterbox and VoxCPM weights resident together. Switching back can require Chatterbox to load again. Model weights are downloaded on first use; installing the Python package alone does not download checkpoints.
+
+Use `INSTALL VOXCPM MODELS.ps1` only after inspecting the dry-run package plan. The installer pins already installed versions of PyTorch, torchaudio, torchvision, NumPy, Triton and xformers, and aborts if pip proposes changing one of them. It does not install model weights.
+
+VoxCPM 0.5B support in this build is inference-only. It is not fine-tuned by uploading ten recordings. The current app uses a single selected anchor and a reviewed transcript; multi-recording training/fine-tuning would require a separate dataset preparation and training pipeline.

@@ -155,11 +155,27 @@ class Storage:
                  item["language"], item["output_path"], item.get("status", "complete"), self._now()),
             )
 
+    def get_history(self, history_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connection() as conn:
+            row = conn.execute("SELECT * FROM history WHERE id=?", (history_id,)).fetchone()
+            return dict(row) if row else None
+
     def list_history(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 500))
         with self._lock, self._connection() as conn:
             rows = conn.execute("SELECT * FROM history ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
             return [dict(row) for row in rows]
+
+    def list_all_history(self) -> list[dict[str, Any]]:
+        """Return all history rows for explicit user-requested history deletion."""
+        with self._lock, self._connection() as conn:
+            rows = conn.execute("SELECT * FROM history ORDER BY created_at DESC").fetchall()
+            return [dict(row) for row in rows]
+
+    def delete_history(self, history_id: str) -> bool:
+        with self._lock, self._connection() as conn:
+            cursor = conn.execute("DELETE FROM history WHERE id=?", (history_id,))
+            return cursor.rowcount > 0
 
 
     def save_project(self, project: dict[str, Any]) -> dict[str, Any]:
