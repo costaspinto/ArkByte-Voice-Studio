@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="t d">
+<title id="t">Voice generation flow</title><desc id="d">A five-stage flow showing text input, API submission, adapter dispatch, local inference and audio playback.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#10192A"/><stop offset="1" stop-color="#080D17"/></linearGradient><linearGradient id="line" x2="1"><stop stop-color="#2CDCEB"/><stop offset="1" stop-color="#A16BFF"/></linearGradient>
+<style>.h{font:700 20px Arial;fill:#F2F7FF}.s{font:14px Arial;fill:#A9B9D1}.k{font:700 11px Arial;letter-spacing:1.7px;fill:#67DDE9}</style></defs>
+<rect width="1200" height="300" rx="24" fill="url(#bg)"/>
+<text x="42" y="47" class="k">GENERATION PIPELINE</text>
+<g>
+<rect x="42" y="92" width="190" height="132" rx="16" fill="#14243A" stroke="#3A5B7B"/>
+<text x="62" y="128" class="k">01 / INPUT</text><text x="62" y="164" class="h">Your script</text><text x="62" y="192" class="s">Text + options</text>
+<rect x="282" y="92" width="190" height="132" rx="16" fill="#14243A" stroke="#3A5B7B"/>
+<text x="302" y="128" class="k">02 / REQUEST</text><text x="302" y="164" class="h">API bridge</text><text x="302" y="192" class="s">Validated payload</text>
+<rect x="522" y="92" width="190" height="132" rx="16" fill="#1A1B3A" stroke="#6457A7"/>
+<text x="542" y="128" class="k">03 / DISPATCH</text><text x="542" y="164" class="h">Model adapter</text><text x="542" y="192" class="s">Engine selection</text>
+<rect x="762" y="92" width="190" height="132" rx="16" fill="#1A1B3A" stroke="#6457A7"/>
+<text x="782" y="128" class="k">04 / INFERENCE</text><text x="782" y="164" class="h">Local runtime</text><text x="782" y="192" class="s">Audio generation</text>
+<rect x="1002" y="92" width="156" height="132" rx="16" fill="#14243A" stroke="#3A5B7B"/>
+<text x="1022" y="128" class="k">05 / RESULT</text><text x="1022" y="164" class="h">Listen</text><text x="1022" y="192" class="s">Playback / export</text>
+<path d="M232 158h50m-9-7 9 7-9 7M472 158h50m-9-7 9 7-9 7M712 158h50m-9-7 9 7-9 7M952 158h50m-9-7 9 7-9 7" stroke="url(#line)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

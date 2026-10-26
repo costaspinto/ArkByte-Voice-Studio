@@ -1,12 +1,14 @@
 <div align="center">
 
+<img src="docs/assets/readme/arkbyte-hero-motion.gif" alt="Animated ArkByte Voice Studio banner" width="100%"/>
+
 # ARKBYTE VOICE STUDIO
 
 ### Your local-first workspace for AI-powered voice generation.
 
 A browser-based voice studio with a Python inference service, modular model adapters, reference-guided voice workflows, and a Windows-friendly local runtime.
 
-<br/>
+<img src="docs/assets/readme/arkbyte-mark.svg" alt="ArkByte Voice Studio logo mark" width="84"/>
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -14,9 +16,7 @@ A browser-based voice studio with a Python inference service, modular model adap
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Status](https://img.shields.io/badge/STATUS-ACTIVE%20DEVELOPMENT-8B5CF6?style=for-the-badge)](#project-status)
 
-<br/>
-
-**[Product Walkthrough](docs/assets/video/ArkByte-Voice-Studio-Walkthrough.mp4)**
+**[▶ Product Walkthrough](docs/assets/video/ArkByte-Voice-Studio-Walkthrough.mp4)**
 &nbsp; · &nbsp;
 **[Architecture](#-architecture)**
 &nbsp; · &nbsp;
@@ -26,9 +26,15 @@ A browser-based voice studio with a Python inference service, modular model adap
 
 </div>
 
+<div align="center">
+
+<img src="docs/assets/readme/audio-waveform-loop.gif" alt="Animated audio waveform" width="94%"/>
+
+</div>
+
 ---
 
-## ✦ Project status
+ ✦ Project status
 
 > [!IMPORTANT]
 > ArkByte Voice Studio is under active development. Model quality, supported hardware, available controls, and inference behavior depend on the selected adapter and local runtime. A successful build or test run does not guarantee identical results across machines.
@@ -75,6 +81,14 @@ Backend tests, TypeScript checks, and a production frontend build form part of t
 </td>
 </tr>
 </table>
+
+<div align="center">
+
+<img src="docs/assets/readme/generation-pipeline-loop.gif" alt="Animated signal moving through the ArkByte voice-generation pipeline" width="100%"/>
+
+<sub>From text input to model dispatch, local inference, and audio output.</sub>
+
+</div>
 
 ## ◈ Product walkthrough
 
@@ -286,6 +300,12 @@ flowchart TD
 </details>
 
 This is a reference-guided workflow, not a claim that the application trains a foundation model from scratch. Model-specific capabilities vary.
+
+<div align="center">
+
+<img src="docs/assets/readme/voice-generation-flow.svg" alt="Five-stage voice generation flow" width="100%"/>
+
+</div>
 
 ## ✦ Voice generation lifecycle
 

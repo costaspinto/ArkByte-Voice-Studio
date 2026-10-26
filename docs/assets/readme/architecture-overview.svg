@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="420" viewBox="0 0 1240 420" role="img" aria-labelledby="t d">
+<title id="t">ArkByte Voice Studio architecture</title><desc id="d">A four-layer architecture diagram from the browser studio through the API bridge and Python orchestration to model inference and audio output.</desc>
+<defs>
+ <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101A2B"/><stop offset="1" stop-color="#080D18"/></linearGradient>
+ <linearGradient id="cyan" x2="1" y2="1"><stop stop-color="#37E8F2"/><stop offset="1" stop-color="#4D8DFF"/></linearGradient>
+ <linearGradient id="violet" x2="1" y2="1"><stop stop-color="#8A72FF"/><stop offset="1" stop-color="#C35CFF"/></linearGradient>
+ <style>
+ .h{font:700 23px Arial,sans-serif;fill:#F1F6FF}.s{font:15px Arial,sans-serif;fill:#A9B9D1}
+ .k{font:700 12px Arial,sans-serif;letter-spacing:2px;fill:#76EAF1}
+ .card{fill:#111E31;stroke:#304866;stroke-width:1.5}.node{fill:#0D1728;stroke:#47617F;stroke-width:1.5}
+ .line{stroke:#63DDEB;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+ </style>
+</defs>
+<rect width="1240" height="420" rx="26" fill="url(#bg)"/>
+<circle cx="1050" cy="70" r="155" fill="#6654DD" opacity=".08"/><circle cx="170" cy="360" r="190" fill="#14B8C4" opacity=".06"/>
+<text x="50" y="48" class="k">SYSTEM ARCHITECTURE</text>
+<text x="50" y="82" class="h">From studio interaction to local audio inference</text>
+<g transform="translate(44 125)">
+ <rect class="card" width="244" height="220" rx="18"/>
+ <rect x="18" y="18" width="36" height="5" rx="2.5" fill="url(#cyan)"/>
+ <text x="18" y="58" class="k">01 / PRESENTATION</text><text x="18" y="96" class="h">Studio UI</text>
+ <text x="18" y="128" class="s">Next.js · React</text><text x="18" y="153" class="s">TypeScript</text>
+ <text x="18" y="190" class="s">Input · controls · playback</text>
+</g>
+<g transform="translate(344 125)">
+ <rect class="card" width="244" height="220" rx="18"/>
+ <rect x="18" y="18" width="36" height="5" rx="2.5" fill="url(#cyan)"/>
+ <text x="18" y="58" class="k">02 / API BOUNDARY</text><text x="18" y="96" class="h">Local bridge</text>
+ <text x="18" y="128" class="s">Next.js API route</text><text x="18" y="153" class="s">Authenticated request</text>
+ <text x="18" y="190" class="s">Proxy · validation boundary</text>
+</g>
+<g transform="translate(644 125)">
+ <rect class="card" width="244" height="220" rx="18"/>
+ <rect x="18" y="18" width="36" height="5" rx="2.5" fill="url(#violet)"/>
+ <text x="18" y="58" class="k">03 / ORCHESTRATION</text><text x="18" y="96" class="h">Python service</text>
+ <text x="18" y="128" class="s">Request validation</text><text x="18" y="153" class="s">Engine / adapter dispatch</text>
+ <text x="18" y="190" class="s">Model selection · coordination</text>
+</g>
+<g transform="translate(944 125)">
+ <rect class="card" width="252" height="220" rx="18"/>
+ <rect x="18" y="18" width="36" height="5" rx="2.5" fill="url(#violet)"/>
+ <text x="18" y="58" class="k">04 / INFERENCE</text><text x="18" y="96" class="h">Model runtime</text>
+ <text x="18" y="128" class="s">Installed model adapters</text><text x="18" y="153" class="s">Audio post-processing</text>
+ <text x="18" y="190" class="s">Configured output · playback</text>
+</g>
+<path class="line" d="M288 235h56m-9-8 9 8-9 8M588 235h56m-9-8 9 8-9 8M888 235h56m-9-8 9 8-9 8"/>
+<text x="50" y="390" class="s">Conceptual request path — adapter availability and optional components depend on the installed runtime.</text>
+</svg>
